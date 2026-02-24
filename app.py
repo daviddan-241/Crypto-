@@ -12,11 +12,12 @@ from flask import Flask, render_template_string, send_file
 import atexit
 
 # ────────────────────────────────────────────────
-#  CONFIGURATION & CONSTANTS
+# CONFIGURATION
 # ────────────────────────────────────────────────
 BOT_NAME       = "PF Raiders"
 TG_TOKEN       = "8765151932:AAHUJ2WtV_Uc-GYW2b8uQARtfPyXwm2qIC0"
 ADMIN_TG_ID    = 8297034218
+PROJECT_LINK   = "https://t.me/PFRaiders"  # ← Change to your real channel/group/link
 
 ETHERSCAN_KEY  = "3JKC13MTMR6JFQUKYMYH7NQVFKQHKSXTYB"
 SOLSCAN_JWT    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkQXQiOjE3NjY5MjYzNzk1OTAsImVtYWlsIjoib3ZvdXJjcm9zc0BnbWFpbC5jb20iLCJhY3Rpb24iOiJ0b2tlbi1hcGkiLCJhcGlWZXJzaW9uIjoidjIiLCJpYXQiOjE3NjY5MjYzNzl9.mCGX77xarC4ojdis92AVpi4iR1kBWRFXNbqHY2leagI"
@@ -28,132 +29,133 @@ PAY_ADDRESSES = {
 }
 
 # ────────────────────────────────────────────────
-# SERVICES – Clean, mature descriptions + emojis + image placeholders
+# SERVICES – Mature descriptions, emojis, images, requirements
 # ────────────────────────────────────────────────
 SERVICES = {
-    # Entry-level (quick buys)
+    # Entry-level
     "pf_name_gen": {
         "name": "Pump.fun Name & Ticker Generator",
         "price": 9,
-        "desc": "50 curated, high-conviction names and tickers ready for immediate use",
+        "desc": "50 curated, high-conviction names and tickers ready for immediate deployment",
         "emoji": "✨",
-        "image": "https://i.imgur.com/example-name-gen.png"  # ← replace with real URL
+        "image": "https://i.imgur.com/8kL9pQz.png",  # ← replace with real image
+        "requirements": "Just tell us your theme or vibe (optional)"
     },
     "raid_messages": {
         "name": "Raid & Shill Message Library",
         "price": 19,
-        "desc": "150+ professionally crafted messages optimized for maximum engagement",
+        "desc": "150+ professionally written messages optimized for engagement and FOMO",
         "emoji": "📢",
-        "image": "https://i.imgur.com/example-raid-msg.png"
+        "image": "https://i.imgur.com/JmN2vYx.png",
+        "requirements": "None – instant delivery"
     },
     "fake_chart_pack": {
         "name": "Premium Pump Chart Templates",
         "price": 29,
-        "desc": "8 high-resolution, editable screenshots of convincing volume spikes",
+        "desc": "8 high-resolution editable screenshots of strong volume spikes",
         "emoji": "📈",
-        "image": "https://i.imgur.com/example-chart-pack.png"
+        "image": "https://i.imgur.com/0vR7kLm.png",
+        "requirements": "None – instant delivery"
     },
     "testimonial_set": {
         "name": "Elite Testimonial Collection",
         "price": 39,
-        "desc": "20 authentic-looking reviews with matching professional avatars",
+        "desc": "20 realistic reviews with matching professional avatars",
         "emoji": "🗣️",
-        "image": "https://i.imgur.com/example-testimonials.png"
+        "image": "https://i.imgur.com/PqX9tRw.png",
+        "requirements": "None – instant delivery"
     },
     "badge_template": {
         "name": "Dex Paid Badge Template",
         "price": 49,
-        "desc": "High-quality PSD file to simulate verified/paid DexTools badge",
+        "desc": "High-quality PSD to simulate verified/paid DexTools badge",
         "emoji": "🏅",
-        "image": "https://i.imgur.com/example-badge.png"
+        "image": "https://i.imgur.com/ZnK3vYp.png",
+        "requirements": "None – instant delivery"
     },
 
-    # Mid-tier professional tools
+    # Mid-tier
     "pf_launch_guide": {
         "name": "Pump.fun Launch Mastery Guide",
         "price": 79,
-        "desc": "Comprehensive 2026 strategy playbook with image & timing optimization",
+        "desc": "Comprehensive 2026 strategy playbook including image and timing optimization",
         "emoji": "📘",
-        "image": "https://i.imgur.com/example-launch-guide.png"
+        "image": "https://i.imgur.com/5tP8mJx.png",
+        "requirements": "Your project name or concept (optional)"
     },
     "meme_concept": {
         "name": "Premium Meme Concept Package",
         "price": 149,
-        "desc": "20 refined, market-ready concepts including visual direction",
+        "desc": "20 refined, market-ready concepts with visual direction",
         "emoji": "🖼️",
-        "image": "https://i.imgur.com/example-meme-concept.png"
+        "image": "https://i.imgur.com/QvL2nKp.png",
+        "requirements": "Preferred theme or meme style"
     },
     "token_template": {
         "name": "Production-Grade Token Contract",
         "price": 199,
         "desc": "Secure SPL / ERC-20 template with deployment documentation",
         "emoji": "🔗",
-        "image": "https://i.imgur.com/example-token-code.png"
+        "image": "https://i.imgur.com/9mW4pYq.png",
+        "requirements": "Token name, symbol, supply (optional)"
     },
     "dexscreener_guide": {
         "name": "DexScreener Trending Playbook",
         "price": 299,
-        "desc": "Proven step-by-step tactics to achieve top rankings",
+        "desc": "Proven step-by-step tactics to secure top rankings",
         "emoji": "🔥",
-        "image": "https://i.imgur.com/example-dex-guide.png"
+        "image": "https://i.imgur.com/RtY7kLm.png",
+        "requirements": "Your token address (after launch)"
     },
     "kol_network": {
         "name": "Curated KOL & Influencer Directory",
         "price": 499,
         "desc": "150+ vetted contacts with pricing and outreach templates",
         "emoji": "🌐",
-        "image": "https://i.imgur.com/example-kol-db.png"
-    },
-    "volume_boost": {
-        "name": "Controlled Volume Strategy Pack",
-        "price": 799,
-        "desc": "Framework for building legitimate-looking volume safely",
-        "emoji": "📊",
-        "image": "https://i.imgur.com/example-volume-pack.png"
-    },
-    "custom_sniper": {
-        "name": "Personalized Sniper Configuration",
-        "price": 999,
-        "desc": "Tailored sniper setup optimized for your target pairs",
-        "emoji": "🎯",
-        "image": "https://i.imgur.com/example-sniper.png"
+        "image": "https://i.imgur.com/XpQ8vRw.png",
+        "requirements": "Your project link or brief"
     },
 
-    # High-ticket premium services
+    # High-ticket
     "dfy_launch": {
         "name": "Done-For-You Pump.fun Launch",
         "price": 2999,
         "desc": "Complete execution — token creation to post-launch promotion",
         "emoji": "🚀",
-        "image": "https://i.imgur.com/example-dfy-launch.png"
+        "image": "https://i.imgur.com/KvM9nJp.png",
+        "requirements": "Project name, vision, budget allocation, preferred KOLs (if any)"
     },
     "top_3_push": {
         "name": "Guaranteed Top 3 Trending Push",
         "price": 4999,
         "desc": "Coordinated strategy aiming for top 3 — partial refund if unmet",
         "emoji": "🏆",
-        "image": "https://i.imgur.com/example-top3-push.png"
+        "image": "https://i.imgur.com/LpR3tYx.png",
+        "requirements": "Token address, launch time, agreed terms & conditions"
     },
     "elite_alpha_access": {
         "name": "Lifetime Elite Alpha Group Access",
         "price": 3999,
         "desc": "Permanent VIP entry + founder-level privileges in private group",
         "emoji": "🔒",
-        "image": "https://i.imgur.com/example-alpha-group.png"
+        "image": "https://i.imgur.com/NqP2vKw.png",
+        "requirements": "Your Telegram username & wallet for verification"
     },
     "mega_raid": {
         "name": "Mega Raid Coordination (2,000+ wallets)",
         "price": 5999,
         "desc": "Large-scale, synchronized activation for maximum impact",
         "emoji": "⚡",
-        "image": "https://i.imgur.com/example-mega-raid.png"
+        "image": "https://i.imgur.com/MvX8kLm.png",
+        "requirements": "Launch time, target volume, coordination details"
     },
     "full_project_director": {
         "name": "Personal Project Director",
         "price": 6999,
         "desc": "End-to-end oversight from concept to sustained performance",
         "emoji": "👑",
-        "image": "https://i.imgur.com/example-director.png"
+        "image": "https://i.imgur.com/QrT9pYq.png",
+        "requirements": "Full project brief, vision, timeline, budget allocation"
     },
 }
 
@@ -189,7 +191,7 @@ def verify_transaction(chain, tx_hash, expected_addr, min_usd):
         return False, "Price fetch failed"
 
     if chain == "ETH":
-        url = f"https://api.etherscan.io/api?module=proxy&action=eth_getTransactionByHash&txhash={tx_hash}&apikey={ETHERSCAN_API_KEY}"
+        url = f"https://api.etherscan.io/api?module=proxy&action=eth_getTransactionByHash&txhash={tx_hash}&apikey={ETHERSCAN_KEY}"
         r = requests.get(url).json()
         result = r.get("result")
         if not result:
@@ -243,6 +245,7 @@ def home():
             #modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); align-items:center; justify-content:center; }
             .modal-box { background:#111827; padding:40px; border-radius:14px; width:92%; max-width:620px; border:1px solid #4b5563; }
             .service-img { width:100%; height:140px; object-fit:cover; border-radius:8px; margin-bottom:15px; }
+            .footer { margin-top:60px; color:#90a4ae; font-size:0.9em; }
         </style>
     </head>
     <body>
@@ -266,6 +269,10 @@ def home():
 
         <br><br><br>
         <button onclick="alert('Use /wallet <address> in Telegram (optional)')">Connect Wallet (Optional)</button>
+
+        <div class="footer">
+            <p>PF Raiders – <a href="{{ project_link }}" style="color:#60a5fa;">Official Channel</a></p>
+        </div>
 
         <div id="modal">
             <div class="modal-box">
@@ -300,7 +307,7 @@ def home():
     </body>
     </html>
     '''
-    return render_template_string(html, uptime=uptime, services=SERVICES, addrs=PAY_ADDRESSES)
+    return render_template_string(html, uptime=uptime, services=SERVICES, addrs=PAY_ADDRESSES, project_link=PROJECT_LINK)
 
 @flask_app.route('/qr')
 def qr():
@@ -330,17 +337,18 @@ def start(message):
         f"Welcome to {BOT_NAME}.\n\n"
         "A private suite built for serious pump.fun operators and high-conviction builders.\n\n"
         "Infrastructure, strategy, and execution — delivered with precision and discretion.\n\n"
+        f"Official channel: {PROJECT_LINK}\n\n"
         "Access the available solutions below."
     )
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(types.KeyboardButton("Connect Wallet (Optional)"))
-    tg_bot.send_message(message.chat.id, welcome, reply_markup=markup)
+    tg_bot.send_message(message.chat.id, welcome, reply_markup=markup, parse_mode='Markdown', disable_web_page_preview=True)
 
     show_services(message)
 
 def show_services(message):
-    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup = types.InlineKeyboardMarkup(row_width=2)
     for key, svc in SERVICES.items():
         btn_text = f"{svc['emoji']} {svc['name']}"
         markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"buy_{key}"))
@@ -361,7 +369,10 @@ def buy_callback(call):
     for ch in PAY_ADDRESSES:
         markup.add(types.InlineKeyboardButton(ch, callback_data=f"pay_{key}_{ch}"))
     tg_bot.edit_message_text(
-        f"{svc['emoji']} **{svc['name']}**\n\n{svc['desc']}\n\nChoose payment network:",
+        f"{svc['emoji']} **{svc['name']}**\n\n{svc['desc']}\n\n"
+        f"**Price:** ${svc['price']}\n\n"
+        f"**Required before payment:** {svc.get('requirements', 'None – instant delivery')}\n\n"
+        "Choose payment network:",
         call.message.chat.id,
         call.message.message_id,
         parse_mode='Markdown',
@@ -377,7 +388,8 @@ def pay_callback(call):
     tg_bot.send_message(
         call.message.chat.id,
         f"Transfer **${svc['price']}** in **{chain}** to:\n\n`{addr}`\n\n"
-        "Reply here with the transaction hash for verification.",
+        "Reply here with the transaction hash for verification.\n\n"
+        f"**Note:** {svc.get('requirements', 'None – instant delivery')}",
         parse_mode='Markdown'
     )
     img = qrcode.make(addr)
@@ -386,6 +398,7 @@ def pay_callback(call):
     buf.seek(0)
     tg_bot.send_photo(call.message.chat.id, buf)
 
+# Wallet connect & approve (unchanged)
 @tg_bot.message_handler(commands=['wallet'])
 def wallet_connect(message):
     if len(message.text.split()) < 2:
@@ -419,8 +432,9 @@ def handle_message(message):
     if uid in pending_orders and pending_orders[uid]["tx_hash"] is None:
         pending_orders[uid]["tx_hash"] = text
         order = pending_orders[uid]
+        svc = SERVICES[order["service_key"]]
         tg_bot.reply_to(message, "Verifying transaction...")
-        success, msg = verify_transaction(order["chain"], text, PAY_ADDRESSES[order["chain"]], SERVICES[order["service_key"]]["price"])
+        success, msg = verify_transaction(order["chain"], text, PAY_ADDRESSES[order["chain"]], svc["price"])
         if success:
             content = DELIVERY_CONTENT.get(order["service_key"], "Access granted. Contact command if further assistance required.")
             tg_bot.send_message(uid, f"Transaction verified.\n\n{content}")
