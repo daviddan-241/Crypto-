@@ -1,456 +1,390 @@
 import os
 import sys
 import time
+import random
+import re
 import threading
-import requests
-from io import BytesIO
-import qrcode
 from filelock import FileLock
-import telebot
-from telebot import types
-from flask import Flask, render_template_string, send_file
-import atexit
+from telebot import TeleBot, types
+from flask import Flask, render_template_string
 
-# ────────────────────────────────────────────────
-# CONFIGURATION
-# ────────────────────────────────────────────────
-BOT_NAME       = "PF Raiders"
-TG_TOKEN       = "8765151932:AAHUJ2WtV_Uc-GYW2b8uQARtfPyXwm2qIC0"
-ADMIN_TG_ID    = 8297034218
-PROJECT_LINK   = "https://t.me/PFRaiders"  # ← Change to your real channel/group/link
+# ===== FLASK FOR KEEP-ALIVE (Render / Railway style) =====
+app = Flask(__name__)
 
-ETHERSCAN_KEY  = "3JKC13MTMR6JFQUKYMYH7NQVFKQHKSXTYB"
-SOLSCAN_JWT    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjcmVhdGVkQXQiOjE3NjY5MjYzNzk1OTAsImVtYWlsIjoib3ZvdXJjcm9zc0BnbWFpbC5jb20iLCJhY3Rpb24iOiJ0b2tlbi1hcGkiLCJhcGlWZXJzaW9uIjoidjIiLCJpYXQiOjE3NjY5MjYzNzl9.mCGX77xarC4ojdis92AVpi4iR1kBWRFXNbqHY2leagI"
+@app.route('/')
+def home():
+    return render_template_string('''
+    <!DOCTYPE html>
+    <html><head><title>PF Raid Whales</title><meta http-equiv="refresh" content="300">
+    <style>body{background:#0f0f23;color:#0f0;color-family:monospace;padding:40px;text-align:center}
+    h1{color:#ff0}.box{background:#111;padding:20px;border-radius:12px;max-width:600px;margin:auto}</style></head>
+    <body><h1>🤖 PF Raid Whales Bot</h1><div class="box">
+    <p>✅ Running</p><p>Uptime: {{ uptime }}</p><p>Sessions: {{ users }}</p><p>Orders: {{ orders }}</p>
+    </div><p>page refreshes every 5 min</p></body></html>
+    ''', uptime=time.strftime('%Y-%m-%d %H:%M:%S'), users=len(user_states), orders=len(user_orders))
+
+@app.route('/health')
+def health(): return {"status": "ok"}, 200
+
+threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)), debug=False, use_reloader=False), daemon=True).start()
+
+# ===== CONFIG =====
+BOT_TOKEN = "8765151932:AAHUJ2WtV_Uc-GYW2b8uQARtfPyXwm2qIC0"
+ADMIN_ID   = 5578314612
+BOT_NAME   = "PF Raid Whales"
 
 PAY_ADDRESSES = {
-    "BTC": "bc1q85h3kkdkevl5w2vkgs5el37swkcca35sth2kkw",
-    "SOL": "EaFeqxptPuo2jy3dA8dRsgRz8JRCPSK5mXT3qZZYT7f3",
-    "ETH": "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A"
+    "BTC": {"addr": "bc1q85h3kkdkevl5w2vkgs5el37swkcca35sth2kkw", "emoji": "₿", "name": "Bitcoin"},
+    "ETH": {"addr": "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A", "emoji": "⛓️", "name": "Ethereum"},
+    "SOL": {"addr": "EaFeqxptPuo2jy3dA8dRsgRz8JRCPSK5mXT3qZZYT7f3", "emoji": "◎", "name": "Solana"}
 }
 
-# ────────────────────────────────────────────────
-# SERVICES – Mature descriptions, emojis, images, requirements
-# ────────────────────────────────────────────────
+bot = TeleBot(BOT_TOKEN)
+
+user_states = {}
+user_orders = {}
+
+# ===== NAVIGATION =====
+def nav_markup():
+    m = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    m.add("🔙 Back", "🔝 Main Menu 🔝")
+    return m
+
+def confirm_markup(act):
+    m = types.InlineKeyboardMarkup(row_width=2)
+    m.add(
+        types.InlineKeyboardButton("✅ Yes", callback_data=f"yes_{act}"),
+        types.InlineKeyboardButton("❌ No",  callback_data=f"no_{act}")
+    )
+    return m
+
+def reset_user(uid):
+    user_states.pop(uid, None)
+    user_orders.pop(uid, None)
+
+def main_menu(cid):
+    m = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    m.add("📦 Services", "📞 Support")
+    bot.send_message(cid, f"🌟 *{BOT_NAME}* 🌟\n\n🚀 Web3 Growth • Raids • Marketing\nChoose below 👇", parse_mode="Markdown", reply_markup=m)
+
+# ===== SERVICES – very low entry prices =====
 SERVICES = {
-    # Entry-level
-    "pf_name_gen": {
-        "name": "Pump.fun Name & Ticker Generator",
-        "price": 9,
-        "desc": "50 curated, high-conviction names and tickers ready for immediate deployment",
-        "emoji": "✨",
-        "image": "https://i.imgur.com/8kL9pQz.png",  # ← replace with real image
-        "requirements": "Just tell us your theme or vibe (optional)"
-    },
-    "raid_messages": {
-        "name": "Raid & Shill Message Library",
-        "price": 19,
-        "desc": "150+ professionally written messages optimized for engagement and FOMO",
-        "emoji": "📢",
-        "image": "https://i.imgur.com/JmN2vYx.png",
-        "requirements": "None – instant delivery"
-    },
-    "fake_chart_pack": {
-        "name": "Premium Pump Chart Templates",
-        "price": 29,
-        "desc": "8 high-resolution editable screenshots of strong volume spikes",
-        "emoji": "📈",
-        "image": "https://i.imgur.com/0vR7kLm.png",
-        "requirements": "None – instant delivery"
-    },
-    "testimonial_set": {
-        "name": "Elite Testimonial Collection",
-        "price": 39,
-        "desc": "20 realistic reviews with matching professional avatars",
-        "emoji": "🗣️",
-        "image": "https://i.imgur.com/PqX9tRw.png",
-        "requirements": "None – instant delivery"
-    },
-    "badge_template": {
-        "name": "Dex Paid Badge Template",
-        "price": 49,
-        "desc": "High-quality PSD to simulate verified/paid DexTools badge",
-        "emoji": "🏅",
-        "image": "https://i.imgur.com/ZnK3vYp.png",
-        "requirements": "None – instant delivery"
-    },
-
-    # Mid-tier
-    "pf_launch_guide": {
-        "name": "Pump.fun Launch Mastery Guide",
-        "price": 79,
-        "desc": "Comprehensive 2026 strategy playbook including image and timing optimization",
-        "emoji": "📘",
-        "image": "https://i.imgur.com/5tP8mJx.png",
-        "requirements": "Your project name or concept (optional)"
-    },
-    "meme_concept": {
-        "name": "Premium Meme Concept Package",
-        "price": 149,
-        "desc": "20 refined, market-ready concepts with visual direction",
-        "emoji": "🖼️",
-        "image": "https://i.imgur.com/QvL2nKp.png",
-        "requirements": "Preferred theme or meme style"
-    },
-    "token_template": {
-        "name": "Production-Grade Token Contract",
-        "price": 199,
-        "desc": "Secure SPL / ERC-20 template with deployment documentation",
-        "emoji": "🔗",
-        "image": "https://i.imgur.com/9mW4pYq.png",
-        "requirements": "Token name, symbol, supply (optional)"
-    },
-    "dexscreener_guide": {
-        "name": "DexScreener Trending Playbook",
-        "price": 299,
-        "desc": "Proven step-by-step tactics to secure top rankings",
-        "emoji": "🔥",
-        "image": "https://i.imgur.com/RtY7kLm.png",
-        "requirements": "Your token address (after launch)"
-    },
-    "kol_network": {
-        "name": "Curated KOL & Influencer Directory",
-        "price": 499,
-        "desc": "150+ vetted contacts with pricing and outreach templates",
-        "emoji": "🌐",
-        "image": "https://i.imgur.com/XpQ8vRw.png",
-        "requirements": "Your project link or brief"
-    },
-
-    # High-ticket
-    "dfy_launch": {
-        "name": "Done-For-You Pump.fun Launch",
-        "price": 2999,
-        "desc": "Complete execution — token creation to post-launch promotion",
-        "emoji": "🚀",
-        "image": "https://i.imgur.com/KvM9nJp.png",
-        "requirements": "Project name, vision, budget allocation, preferred KOLs (if any)"
-    },
-    "top_3_push": {
-        "name": "Guaranteed Top 3 Trending Push",
-        "price": 4999,
-        "desc": "Coordinated strategy aiming for top 3 — partial refund if unmet",
-        "emoji": "🏆",
-        "image": "https://i.imgur.com/LpR3tYx.png",
-        "requirements": "Token address, launch time, agreed terms & conditions"
-    },
-    "elite_alpha_access": {
-        "name": "Lifetime Elite Alpha Group Access",
-        "price": 3999,
-        "desc": "Permanent VIP entry + founder-level privileges in private group",
-        "emoji": "🔒",
-        "image": "https://i.imgur.com/NqP2vKw.png",
-        "requirements": "Your Telegram username & wallet for verification"
-    },
-    "mega_raid": {
-        "name": "Mega Raid Coordination (2,000+ wallets)",
-        "price": 5999,
-        "desc": "Large-scale, synchronized activation for maximum impact",
-        "emoji": "⚡",
-        "image": "https://i.imgur.com/MvX8kLm.png",
-        "requirements": "Launch time, target volume, coordination details"
-    },
-    "full_project_director": {
-        "name": "Personal Project Director",
-        "price": 6999,
-        "desc": "End-to-end oversight from concept to sustained performance",
-        "emoji": "👑",
-        "image": "https://i.imgur.com/QrT9pYq.png",
-        "requirements": "Full project brief, vision, timeline, budget allocation"
-    },
+    "token_marketing": {"name": "🚀 Token Marketing", "tiers": {
+        "micro":   {"n": "Micro",   "p": 35,   "d": "basic posts • 24h"},
+        "starter": {"n": "Starter", "p": 90,   "d": "socials + calls"},
+        "growth":  {"n": "Growth",  "p": 250,  "d": "KOLs + trending"},
+        "elite":   {"n": "Elite",   "p": 650,  "d": "full campaign"}
+    }},
+    "raiding_service": {"name": "⚔️ Raiding", "tiers": {
+        "micro":   {"n": "Micro",   "p": 45,   "d": "1 day light raid"},
+        "starter": {"n": "Starter", "p": 110,  "d": "1–2 days"},
+        "growth":  {"n": "Growth",  "p": 280,  "d": "3–5 days"},
+        "elite":   {"n": "Elite",   "p": 700,  "d": "7+ days heavy"}
+    }},
+    "calls_promotion": {"name": "📣 Calls Promo", "tiers": {
+        "micro":   {"n": "Micro",   "p": 30,   "d": "few small calls"},
+        "starter": {"n": "Starter", "p": 80,   "d": "5–10 calls"},
+        "growth":  {"n": "Growth",  "p": 200,  "d": "mid-tier calls"},
+        "elite":   {"n": "Elite",   "p": 550,  "d": "premium network"}
+    }},
+    "dex_trending": {"name": "🔥 DEX Trending", "tiers": {
+        "micro":   {"n": "Micro",   "p": 50,   "d": "small bump"},
+        "starter": {"n": "Starter", "p": 130,  "d": "basic push"},
+        "growth":  {"n": "Growth",  "p": 320,  "d": "multi-DEX"},
+        "elite":   {"n": "Elite",   "p": 800,  "d": "sustained"}
+    }},
+    "influencer_outreach": {"name": "🤝 KOL Outreach", "tiers": {
+        "micro":   {"n": "Micro",   "p": 70,   "d": "2–3 micro"},
+        "starter": {"n": "Starter", "p": 180,  "d": "3–5 micro"},
+        "growth":  {"n": "Growth",  "p": 450,  "d": "8–12 mid"},
+        "elite":   {"n": "Elite",   "p": 1100, "d": "15+ top"}
+    }},
+    "nft_promotion": {"name": "🎨 NFT Promotion", "tiers": {
+        "micro":   {"n": "Micro",   "p": 55,   "d": "basic shill"},
+        "starter": {"n": "Starter", "p": 140,  "d": "NFT promo"},
+        "growth":  {"n": "Growth",  "p": 340,  "d": "mint hype"},
+        "elite":   {"n": "Elite",   "p": 850,  "d": "full launch"}
+    }},
+    "meme_listing": {"name": "😂 Meme Listing", "tiers": {
+        "micro":   {"n": "Micro",   "p": 25,   "d": "quick push"},
+        "starter": {"n": "Starter", "p": 70,   "d": "listing help"},
+        "growth":  {"n": "Growth",  "p": 160,  "d": "trending push"},
+        "elite":   {"n": "Elite",   "p": 420,  "d": "viral push"}
+    }},
+    "token_verification": {"name": "✅ Verification", "tiers": {
+        "micro":   {"n": "Micro",   "p": 20,   "d": "basic check"},
+        "starter": {"n": "Starter", "p": 55,   "d": "blue check"},
+        "growth":  {"n": "Growth",  "p": 130,  "d": "advanced"},
+        "elite":   {"n": "Elite",   "p": 320,  "d": "premium + audit"}
+    }},
+    "token_pumping": {"name": "📈 Pumping", "tiers": {
+        "micro":   {"n": "Micro",   "p": 80,   "d": "light coord"},
+        "starter": {"n": "Starter", "p": 200,  "d": "volume pump"},
+        "growth":  {"n": "Growth",  "p": 480,  "d": "strong pump"},
+        "elite":   {"n": "Elite",   "p": 1200, "d": "sustained"}
+    }},
+    "dex_listing": {"name": "📊 DEX Listing", "tiers": {
+        "micro":   {"n": "Micro",   "p": 45,   "d": "basic help"},
+        "starter": {"n": "Starter", "p": 110,  "d": "listing support"},
+        "growth":  {"n": "Growth",  "p": 260,  "d": "fast + promo"},
+        "elite":   {"n": "Elite",   "p": 650,  "d": "premium"}
+    }},
+    "birdeye_listing": {"name": "👁 Birdeye Listing", "tiers": {
+        "micro":   {"n": "Micro",   "p": 35,   "d": "basic push"},
+        "starter": {"n": "Starter", "p": 90,   "d": "fast listing"},
+        "growth":  {"n": "Growth",  "p": 220,  "d": "advanced"},
+        "elite":   {"n": "Elite",   "p": 550,  "d": "premium"}
+    }},
+    "twitter_shilling": {"name": "🐦 Twitter Shill", "tiers": {
+        "micro":   {"n": "Micro",   "p": 40,   "d": "basic posts"},
+        "starter": {"n": "Starter", "p": 100,  "d": "campaign"},
+        "growth":  {"n": "Growth",  "p": 240,  "d": "strong hype"},
+        "elite":   {"n": "Elite",   "p": 600,  "d": "viral"}
+    }},
+    "revenue_share_marketing": {"name": "💰 Rev Share Deal", "tiers": {
+        "custom": {"n": "Custom", "p": 0, "d": "performance based"}
+    }},
 }
 
-DELIVERY_CONTENT = {
-    "pf_name_gen": "Your curated 50 PF-ready names & tickers delivered.\nExample:\n1. PumpLord → $PUMP\n2. SolChad → $SCHAD\n... (full list)",
-    "raid_messages": "Raid & shill message pack delivered – 150+ optimized copies ready.",
-    "dfy_launch": "Done-for-you launch slot confirmed.\nPlease DM @Bryanlucas90 immediately with project name, vision, and any preferences.",
-    "top_3_push": "Top 3 trending push reserved.\nStrict terms apply — DM @Bryanlucas90 to initiate coordination.",
-    # Add real links / files for others
+TIER_REQUIREMENTS = {
+    "token_marketing": {
+        "growth":  [{"f":"audience", "p":"Target audience? (degens / holders / ...)"}, {"f":"reach", "p":"Desired reach goal?"}],
+        "elite":   [{"f":"audience", "p":"Target audience?"}, {"f":"reach", "p":"Reach goal?"}, {"f":"platforms", "p":"Preferred platforms?"}]
+    },
+    "raiding_service": {
+        "growth":  [{"f":"days", "p":"How many days raiding?"}],
+        "elite":   [{"f":"days", "p":"Days?"}, {"f":"channels", "p":"Target group sizes?"}]
+    },
+    "calls_promotion": {
+        "growth":  [{"f":"calls", "p":"How many calls / groups?"}],
+        "elite":   [{"f":"calls", "p":"Number of calls?"}, {"f":"callers", "p":"Preferred caller types?"}]
+    },
+    "dex_trending": {
+        "growth":  [{"f":"volume", "p":"Target 24h volume?"}],
+        "elite":   [{"f":"volume", "p":"24h volume goal?"}, {"f":"days", "p":"Days to sustain?"}]
+    },
+    "influencer_outreach": {
+        "growth":  [{"f":"kolcount", "p":"How many mid KOLs?"}, {"f":"niches", "p":"Preferred niches?"}],
+        "elite":   [{"f":"kolcount", "p":"Total KOLs?"}, {"f":"niches", "p":"Niches?"}, {"f":"budget", "p":"Budget per KOL?"}]
+    }
 }
 
-pending_orders = {}
-pending_wallets = {}
+def valid_contract(t): return t.strip() in ["N/A","n/a",""] or bool(re.match(r'^0x[a-fA-F0-9]{40}$',t)) or bool(re.match(r'^[1-9A-HJ-NP-Za-km-z]{32,44}$',t))
+def valid_tg(t):       return t.lower().strip().startswith(('https://t.me/','t.me/','@'))
+def valid_usd(t):      return bool(re.match(r'^\d+(\.\d+)?$', t.strip())) and 0 < float(t.strip()) <= 100000
+def valid_int(t, mi=1, ma=100000): return t.isdigit() and mi <= int(t) <= ma
 
-flask_app = Flask(__name__)
-PORT = int(os.environ.get('PORT', 10000))
-start_time = time.time()
+# ===== MAIN HANDLERS =====
 
-# ────────────────────────────────────────────────
-# HELPERS – Price & Verification
-# ────────────────────────────────────────────────
-def get_crypto_price(chain):
-    ids = {"BTC": "bitcoin", "SOL": "solana", "ETH": "ethereum"}
-    try:
-        r = requests.get(f"https://api.coingecko.com/api/v3/simple/price?ids={ids[chain]}&vs_currencies=usd")
-        return r.json()[ids[chain]]["usd"]
-    except:
-        return 0
+@bot.message_handler(func=lambda m: m.text == "📦 Services")
+def list_services(m):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for k,v in SERVICES.items():
+        markup.add(types.InlineKeyboardButton(v["name"], callback_data=f"cat_{k}"))
+    bot.send_message(m.chat.id, "Select category:", reply_markup=markup)
 
-def verify_transaction(chain, tx_hash, expected_addr, min_usd):
-    price = get_crypto_price(chain)
-    if price == 0:
-        return False, "Price fetch failed"
+@bot.callback_query_handler(func=lambda c: c.data.startswith("cat_"))
+def show_tiers(c):
+    k = c.data[4:]
+    s = SERVICES[k]
+    m = types.InlineKeyboardMarkup(row_width=1)
+    for tk,tv in s["tiers"].items():
+        pr = "Custom" if tv["p"]==0 else f"${tv['p']}"
+        m.add(types.InlineKeyboardButton(f"{tv['n']} – {pr} – {tv['d']}", callback_data=f"tier_{k}_{tk}"))
+    bot.edit_message_text(f"**{s['name']}** tiers:", c.message.chat.id, c.message.message_id, parse_mode="Markdown", reply_markup=m)
 
-    if chain == "ETH":
-        url = f"https://api.etherscan.io/api?module=proxy&action=eth_getTransactionByHash&txhash={tx_hash}&apikey={ETHERSCAN_KEY}"
-        r = requests.get(url).json()
-        result = r.get("result")
-        if not result:
-            return False, "Transaction not found"
-        if result["to"].lower() != expected_addr.lower():
-            return False, "Wrong recipient"
-        value = int(result["value"], 16) / 1e18
-        if value * price < min_usd:
-            return False, f"Amount too low (${value * price:.2f})"
-        return True, f"Verified (${value * price:.2f})"
+@bot.callback_query_handler(func=lambda c: c.data.startswith("tier_"))
+def select_tier(c):
+    _, sk, tk = c.data.split("_")
+    s = SERVICES[sk]
+    t = s["tiers"][tk]
 
-    if chain == "SOL":
-        headers = {"Authorization": f"Bearer {SOLSCAN_JWT}"}
-        r = requests.get(f"https://pro-api.solscan.io/v2.0/transaction/detail?tx={tx_hash}", headers=headers)
-        if r.status_code != 200 or r.json().get("data", {}).get("status") != "Success":
-            return False, "Invalid or failed tx"
-        return True, "SOL transaction confirmed"
+    uid = c.from_user.id
+    user_orders[uid] = {
+        "sk": sk, "tk": tk,
+        "service": s["name"], "tier": t["n"], "price": t["p"], "desc": t["d"],
+        "history": ["project"]
+    }
+    user_states[uid] = "project"
 
-    if chain == "BTC":
-        r = requests.get(f"https://blockchain.info/rawtx/{tx_hash}?cors=true").json()
-        if "error" in r:
-            return False, "Transaction not found"
-        for out in r.get("out", []):
-            if out.get("addr") == expected_addr and out["value"] / 1e8 * price >= min_usd:
-                return True, "BTC transaction confirmed"
-        return False, "No matching transfer"
-
-    return False, "Unsupported chain"
-
-# ────────────────────────────────────────────────
-# FLASK WEBSITE – PF Raiders Theme
-# ────────────────────────────────────────────────
-@flask_app.route('/')
-def home():
-    uptime = time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))
-    html = '''
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <title>PF Raiders – Precision Execution</title>
-        <style>
-            body { background:#0a0e1a; color:#d0f0ff; font-family:monospace; margin:0; padding:30px; text-align:center; }
-            h1 { color:#ffeb3b; font-size:3.2em; margin-bottom:10px; }
-            .intro { color:#90a4ae; max-width:900px; margin:0 auto 50px; font-size:1.15em; line-height:1.7; }
-            .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(360px, 1fr)); gap:30px; max-width:1500px; margin:auto; }
-            .card { background:#111827; border:1px solid #374151; border-radius:12px; padding:30px; transition:0.3s; }
-            .card:hover { transform:translateY(-8px); border-color:#60a5fa; box-shadow:0 10px 25px rgba(96,165,250,0.15); }
-            .price { font-size:1.9em; color:#ffeb3b; font-weight:bold; margin:20px 0; }
-            button { background:#60a5fa; color:#000; border:none; padding:16px 36px; font-size:1.15em; cursor:pointer; border-radius:8px; font-weight:bold; }
-            #modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); align-items:center; justify-content:center; }
-            .modal-box { background:#111827; padding:40px; border-radius:14px; width:92%; max-width:620px; border:1px solid #4b5563; }
-            .service-img { width:100%; height:140px; object-fit:cover; border-radius:8px; margin-bottom:15px; }
-            .footer { margin-top:60px; color:#90a4ae; font-size:0.9em; }
-        </style>
-    </head>
-    <body>
-        <h1>PF Raiders</h1>
-        <div class="intro">
-            Precision infrastructure and strategic execution for serious pump.fun operators.<br>
-            From foundational tools to full-cycle dominance — built for discretion and results.
-        </div>
-
-        <div class="grid">
-            {% for k, s in services.items() %}
-            <div class="card">
-                <img src="{{ s.image }}" class="service-img" alt="{{ s.name }}">
-                <h3>{{ s.emoji }} {{ s.name }}</h3>
-                <p>{{ s.desc }}</p>
-                <div class="price">${{ s.price }}</div>
-                <button onclick="showPay('{{ k }}', '{{ s.name }}', {{ s.price }})">Secure Access</button>
-            </div>
-            {% endfor %}
-        </div>
-
-        <br><br><br>
-        <button onclick="alert('Use /wallet <address> in Telegram (optional)')">Connect Wallet (Optional)</button>
-
-        <div class="footer">
-            <p>PF Raiders – <a href="{{ project_link }}" style="color:#60a5fa;">Official Channel</a></p>
-        </div>
-
-        <div id="modal">
-            <div class="modal-box">
-                <h2 id="m-title"></h2>
-                <p><strong>Investment:</strong> $<span id="m-price"></span></p>
-                <select id="chain-select" onchange="updQR()">
-                    <option>BTC</option><option>SOL</option><option>ETH</option>
-                </select>
-                <p><strong>Address:</strong> <span id="addr-show"></span></p>
-                <img id="qr-img" src="" style="width:280px; margin:25px auto; display:block; border:1px solid #4b5563;">
-                <p style="color:#90a4ae; font-size:0.98em;">
-                    Transfer exact amount → reply with transaction hash in Telegram for verification.
-                </p>
-                <button onclick="document.getElementById('modal').style.display='none'" style="background:#374151;color:#fff;">Close</button>
-            </div>
-        </div>
-
-        <script>
-        function showPay(k, n, p) {
-            document.getElementById('m-title').innerText = n;
-            document.getElementById('m-price').innerText = p;
-            document.getElementById('modal').style.display = 'flex';
-            updQR();
-        }
-        function updQR() {
-            let c = document.getElementById('chain-select').value;
-            let a = {{ addrs | tojson }}[c];
-            document.getElementById('addr-show').innerText = a;
-            document.getElementById('qr-img').src = `/qr?chain=${c}`;
-        }
-        </script>
-    </body>
-    </html>
-    '''
-    return render_template_string(html, uptime=uptime, services=SERVICES, addrs=PAY_ADDRESSES, project_link=PROJECT_LINK)
-
-@flask_app.route('/qr')
-def qr():
-    c = request.args.get('chain', 'BTC')
-    addr = PAY_ADDRESSES.get(c, PAY_ADDRESSES['BTC'])
-    qr_img = qrcode.make(addr)
-    buf = BytesIO()
-    qr_img.save(buf, 'PNG')
-    buf.seek(0)
-    return send_file(buf, mimetype='image/png')
-
-@flask_app.route('/health')
-def health():
-    return "OK", 200
-
-def run_flask():
-    flask_app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
-
-# ────────────────────────────────────────────────
-# TELEGRAM BOT – PF Raiders
-# ────────────────────────────────────────────────
-tg_bot = telebot.TeleBot(TG_TOKEN)
-
-@tg_bot.message_handler(commands=['start'])
-def start(message):
-    welcome = (
-        f"Welcome to {BOT_NAME}.\n\n"
-        "A private suite built for serious pump.fun operators and high-conviction builders.\n\n"
-        "Infrastructure, strategy, and execution — delivered with precision and discretion.\n\n"
-        f"Official channel: {PROJECT_LINK}\n\n"
-        "Access the available solutions below."
+    bot.send_message(
+        uid,
+        f"Selected: **{s['name']} – {t['n']}**\nPrice: {'Custom' if t['p']==0 else f'${t['p']}'}\n\nProject name?",
+        parse_mode="Markdown",
+        reply_markup=nav_markup()
     )
 
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add(types.KeyboardButton("Connect Wallet (Optional)"))
-    tg_bot.send_message(message.chat.id, welcome, reply_markup=markup, parse_mode='Markdown', disable_web_page_preview=True)
+@bot.message_handler(func=lambda m: m.from_user.id in user_states)
+def collect_data(m):
+    uid = m.from_user.id
+    st = user_states.get(uid)
+    if not st: return
 
-    show_services(message)
+    txt = m.text.strip()
+    if txt in ["🔙 Back", "🔝 Main Menu 🔝"]: return
 
-def show_services(message):
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    for key, svc in SERVICES.items():
-        btn_text = f"{svc['emoji']} {svc['name']}"
-        markup.add(types.InlineKeyboardButton(btn_text, callback_data=f"buy_{key}"))
-    tg_bot.send_message(
-        message.chat.id,
-        "Available Solutions:",
-        reply_markup=markup
-    )
+    ord = user_orders.setdefault(uid, {})
+    hist = ord.setdefault("history", [])
 
-@tg_bot.callback_query_handler(func=lambda call: call.data.startswith('buy_'))
-def buy_callback(call):
-    key = call.data[4:]
-    if key not in SERVICES:
-        tg_bot.answer_callback_query(call.id, "Service not found")
-        return
-    svc = SERVICES[key]
-    markup = types.InlineKeyboardMarkup(row_width=3)
-    for ch in PAY_ADDRESSES:
-        markup.add(types.InlineKeyboardButton(ch, callback_data=f"pay_{key}_{ch}"))
-    tg_bot.edit_message_text(
-        f"{svc['emoji']} **{svc['name']}**\n\n{svc['desc']}\n\n"
-        f"**Price:** ${svc['price']}\n\n"
-        f"**Required before payment:** {svc.get('requirements', 'None – instant delivery')}\n\n"
-        "Choose payment network:",
-        call.message.chat.id,
-        call.message.message_id,
-        parse_mode='Markdown',
-        reply_markup=markup
-    )
+    def err(msg):
+        bot.send_message(uid, f"❌ {msg}\nTry again:", reply_markup=nav_markup())
 
-@tg_bot.callback_query_handler(func=lambda call: call.data.startswith('pay_'))
-def pay_callback(call):
-    _, key, chain = call.data.split('_')
-    svc = SERVICES[key]
-    addr = PAY_ADDRESSES[chain]
-    pending_orders[call.from_user.id] = {"service_key": key, "chain": chain, "tx_hash": None}
-    tg_bot.send_message(
-        call.message.chat.id,
-        f"Transfer **${svc['price']}** in **{chain}** to:\n\n`{addr}`\n\n"
-        "Reply here with the transaction hash for verification.\n\n"
-        f"**Note:** {svc.get('requirements', 'None – instant delivery')}",
-        parse_mode='Markdown'
-    )
-    img = qrcode.make(addr)
-    buf = BytesIO()
-    img.save(buf, 'PNG')
-    buf.seek(0)
-    tg_bot.send_photo(call.message.chat.id, buf)
+    hist.append(st)
 
-# Wallet connect & approve (unchanged)
-@tg_bot.message_handler(commands=['wallet'])
-def wallet_connect(message):
-    if len(message.text.split()) < 2:
-        tg_bot.reply_to(message, "Usage: /wallet your_address_here")
-        return
-    addr = ' '.join(message.text.split()[1:])
-    pending_wallets[message.from_user.id] = {"wallet": addr, "timestamp": time.time()}
-    tg_bot.forward_message(ADMIN_TG_ID, message.chat.id, message.message_id)
-    tg_bot.reply_to(message, "Address forwarded to command. Await confirmation.")
+    if st == "project":
+        if not 2 <= len(txt) <= 80:
+            err("Name 2–80 characters")
+            hist.pop()
+            return
+        ord["project"] = txt
+        user_states[uid] = "contract"
+        bot.send_message(uid, "Contract address (or N/A):", reply_markup=nav_markup())
 
-@tg_bot.message_handler(commands=['approve_wallet'])
-def approve_wallet(message):
-    if message.from_user.id != ADMIN_TG_ID:
-        return
-    try:
-        uid = int(message.text.split()[1])
-        if uid in pending_wallets:
-            del pending_wallets[uid]
-            tg_bot.send_message(message.chat.id, f"Wallet entry for {uid} cleared.")
-            tg_bot.send_message(uid, "Wallet connection processed.")
+    elif st == "contract":
+        if not valid_contract(txt):
+            err("Invalid address (0x... / Solana / N/A)")
+            hist.pop()
+            return
+        ord["contract"] = txt.upper() if txt.lower() != "n/a" else "N/A"
+        user_states[uid] = "chain"
+        bot.send_message(uid, "Blockchain (SOL/ETH/...):", reply_markup=nav_markup())
+
+    elif st == "chain":
+        if not 2 <= len(txt) <= 20:
+            err("Chain name 2–20 chars")
+            hist.pop()
+            return
+        ord["chain"] = txt.upper()
+        user_states[uid] = "budget"
+        bot.send_message(uid, "Marketing budget $ (number):", reply_markup=nav_markup())
+
+    elif st == "budget":
+        if not valid_usd(txt):
+            err("Enter valid number")
+            hist.pop()
+            return
+        ord["budget"] = txt
+        user_states[uid] = "telegram"
+        bot.send_message(uid, "Telegram link (@ or https://t.me/...):", reply_markup=nav_markup())
+
+    elif st == "telegram":
+        if not valid_tg(txt):
+            err("Must start with @ or https://t.me/")
+            hist.pop()
+            return
+        ord["telegram"] = txt
+
+        extra = TIER_REQUIREMENTS.get(ord["sk"], {}).get(ord["tk"], [])
+        if extra:
+            ord["extra_list"] = extra
+            ord["extra_idx"] = 0
+            user_states[uid] = "extra"
+            bot.send_message(uid, extra[0]["p"], reply_markup=nav_markup())
         else:
-            tg_bot.send_message(message.chat.id, "No pending entry.")
-    except:
-        tg_bot.send_message(message.chat.id, "Usage: /approve_wallet <user_id>")
+            bot.send_message(uid, "All done. Submit order?", reply_markup=confirm_markup("order"))
+            user_states[uid] = "confirm_order"
 
-@tg_bot.message_handler(func=lambda m: True)
-def handle_message(message):
-    uid = message.from_user.id
-    text = message.text.strip()
+    elif st == "extra":
+        ex = ord["extra_list"]
+        idx = ord["extra_idx"]
+        fld = ex[idx]["f"]
 
-    if uid in pending_orders and pending_orders[uid]["tx_hash"] is None:
-        pending_orders[uid]["tx_hash"] = text
-        order = pending_orders[uid]
-        svc = SERVICES[order["service_key"]]
-        tg_bot.reply_to(message, "Verifying transaction...")
-        success, msg = verify_transaction(order["chain"], text, PAY_ADDRESSES[order["chain"]], svc["price"])
-        if success:
-            content = DELIVERY_CONTENT.get(order["service_key"], "Access granted. Contact command if further assistance required.")
-            tg_bot.send_message(uid, f"Transaction verified.\n\n{content}")
-            del pending_orders[uid]
+        ok = True
+        if "days" in fld or "count" in fld or "volume" in fld:
+            ok = valid_int(txt)
+        if not ok:
+            err("Invalid format")
+            hist.pop()
+            return
+
+        ord[fld] = txt
+
+        if idx + 1 < len(ex):
+            ord["extra_idx"] += 1
+            bot.send_message(uid, ex[idx+1]["p"], reply_markup=nav_markup())
         else:
-            tg_bot.reply_to(message, f"Verification failed: {msg}\nPlease review and resubmit.")
+            bot.send_message(uid, "All done. Submit order?", reply_markup=confirm_markup("order"))
+            user_states[uid] = "confirm_order"
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith(("yes_","no_")))
+def handle_confirm(c):
+    uid = c.from_user.id
+    parts = c.data.split("_")
+    ans, act = parts[0], parts[1]
+
+    if ans == "no":
+        bot.edit_message_text("Cancelled.", c.message.chat.id, c.message.message_id)
         return
 
-    tg_bot.reply_to(message, "Use /start to view solutions or /wallet <address> for optional connection.")
+    if act == "order":
+        bot.edit_message_text("Order sent to team!", c.message.chat.id, c.message.message_id)
+        send_order_to_admin(uid)
+        if user_orders[uid]["price"] > 0:
+            show_payment_options(uid)
+        else:
+            reset_user(uid)
 
-# ────────────────────────────────────────────────
-# MAIN ENTRY POINT
-# ────────────────────────────────────────────────
-if __name__ == "__main__":
-    print(f"{BOT_NAME} platform initializing...")
-    threading.Thread(target=run_flask, daemon=True).start()
-    threading.Thread(target=tg_bot.infinity_polling, kwargs={'timeout': 20}, daemon=True).start()
-    while True:
-        time.sleep(300)
+    elif act == "tx":
+        tx = user_orders[uid].get("pending_tx","")
+        if tx:
+            bot.edit_message_text("TX submitted – waiting for confirmation", c.message.chat.id, c.message.message_id)
+            bot.send_message(ADMIN_ID, f"💸 TX from {uid}\n{user_orders[uid]['service']} – {user_orders[uid]['tier']}\n${user_orders[uid]['price']}\nTX: {tx}")
+            user_states[uid] = "waiting_approve"
+
+def send_order_to_admin(uid):
+    o = user_orders.get(uid, {})
+    lines = [
+        f"🆕 ORDER {uid}",
+        f"{o.get('service','–')} – {o.get('tier','–')}  ${o.get('price','–')}",
+        f"Project: {o.get('project','–')}",
+        f"Contract: {o.get('contract','–')}",
+        f"Chain: {o.get('chain','–')}",
+        f"Budget: ${o.get('budget','–')}",
+        f"TG: {o.get('telegram','–')}"
+    ]
+    for k,v in o.items():
+        if k not in ["sk","tk","service","tier","price","desc","history","extra_list","extra_idx"]:
+            lines.append(f"{k.title()}: {v}")
+    bot.send_message(ADMIN_ID, "\n".join(lines))
+
+def show_payment_options(uid):
+    m = types.InlineKeyboardMarkup(row_width=3)
+    for k in PAY_ADDRESSES:
+        m.add(types.InlineKeyboardButton(k, callback_data=f"pay_{k}"))
+    bot.send_message(uid, f"Pay **${user_orders[uid]['price']}** – choose network:", reply_markup=m)
+
+@bot.callback_query_handler(func=lambda c: c.data.startswith("pay_"))
+def start_payment(c):
+    chain = c.data[4:]
+    info = PAY_ADDRESSES[chain]
+    p = user_orders[c.from_user.id]["price"]
+    txt = (
+        f"Send **${p}** to:\n\n"
+        f"{info['emoji']} **{info['name']}**\n"
+        f"`{info['addr']}`\n\n"
+        "Reply with TX hash after sending"
+    )
+    bot.send_message(c.from_user.id, txt, parse_mode="Markdown", reply_markup=nav_markup())
+    user_states[c.from_user.id] = "tx"
+
+@bot.message_handler(func=lambda m: user_states.get(m.from_user.id) == "tx")
+def receive_tx(m):
+    uid = m.from_user.id
+    tx = m.text.strip()
+    user_orders[uid]["pending_tx"] = tx
+    bot.send_message(uid, f"Confirm TX hash?\n`{tx}`", parse_mode="Markdown", reply_markup=confirm_markup("tx"))
+
+@bot.message_handler(func=lambda m: m.text == "📞 Support")
+def support(m):
+    bot.send_message(m.chat.id, "Contact admin directly → @youradminusernamehere")
+
+@bot.message_handler(func=lambda m: m.text == "🔝 Main Menu 🔝")
+def force_main(m):
+    bot.send_message(m.chat.id, "Return to main menu?", reply_markup=confirm_markup("main"))
+
+@bot.message_handler(func=lambda m: m.text == "🔙 Back")
+def go_prev(m):
+    go_back(m.from_user.id)
+
+print(f"{BOT_NAME} started – {time.ctime()}")
+bot.infinity_polling()
