@@ -1,6 +1,6 @@
 # =====================================================================
 #  PF Raid Whales – Professional Web3 Marketing Telegram Bot
-#  Complete version – February 2026 – lower entry + higher impact tiers
+#  Complete fixed version – ready for Render – February 2026 style
 # =====================================================================
 
 import os
@@ -11,14 +11,14 @@ import re
 from telebot import TeleBot, types
 from flask import Flask
 
-# ─── Flask (Render / hosting health check) ────────────────────────────
+# ─── Flask health endpoint (required by Render) ───────────────────────
 app = Flask(__name__)
 
-@app.route('/')
+[@app](https://x.com/app).route('/')
 def home():
     return f"PF Raid Whales – Active since {time.strftime('%Y-%m-%d %H:%M:%S UTC')}"
 
-@app.route('/health')
+[@app](https://x.com/app).route('/health')
 def health():
     return {"status": "ok"}, 200
 
@@ -34,9 +34,9 @@ threading.Thread(
 
 # ─── Bot Configuration ────────────────────────────────────────────────
 TOKEN       = "8765151932:AAHUJ2WtV_Uc-GYW2b8uQARtfPyXwm2qIC0"
-ADMIN_ID    = 8235324142
+ADMIN_ID    = 8235324142               # ← change if needed
 BOT_NAME    = "PF Raid Whales"
-HEADER_IMG  = "https://i.ibb.co/bj0fnN56/IMG-1994.jpg"
+HEADER_IMG  = "[https://i.ibb.co/bj0fnN56/IMG-1994.jpg](https://i.ibb.co/bj0fnN56/IMG-1994.jpg)"
 
 PAYMENT_METHODS = {
     "BTC": {"addr": "bc1q85h3kkdkevl5w2vkgs5el37swkcca35sth2kkw", "symbol": "₿",  "name": "Bitcoin"},
@@ -83,7 +83,7 @@ def main_menu(cid):
     mk.add("📋 Services", "🛎️ Support")
     bot.send_photo(cid, HEADER_IMG, caption=txt, parse_mode="Markdown", reply_markup=mk)
 
-# ─── All Services (17 total – adjusted prices + 3 new profit-oriented) ─
+# ─── Services (17 total – lower entry prices + higher impact tiers) ───
 
 SERVICES = {
     "token_marketing": {
@@ -223,7 +223,6 @@ SERVICES = {
             "custom": {"n": "Custom", "p":    0, "d": "Performance-based long-term deal"}
         }
     },
-    # ─── NEW SERVICES (short-term price / attention focused) ───────────
     "quick_pump": {
         "emoji": "⚡💰",
         "name": "Quick Pump Coordination",
@@ -256,41 +255,39 @@ SERVICES = {
     }
 }
 
-# ─── Start & Main Menu Handlers ───────────────────────────────────────
+# ─── Handlers ─────────────────────────────────────────────────────────
 
-@bot.message_handler(commands=['start'])
+[@bot](https://x.com/bot).message_handler(commands=['start'])
 def cmd_start(message):
-    main_menu(message.chat.id)
+    main_menu([message.chat.id](http://message.chat.id))
 
-@bot.message_handler(func=lambda m: m.text in ["Main Menu 🔝", "Main Menu"])
+[@bot](https://x.com/bot).message_handler(func=lambda m: m.text in ["Main Menu 🔝", "Main Menu"])
 def return_main(message):
-    main_menu(message.chat.id)
+    main_menu([message.chat.id](http://message.chat.id))
 
-@bot.message_handler(func=lambda m: m.text in ["🔙 Back", "Back"])
+[@bot](https://x.com/bot).message_handler(func=lambda m: m.text in ["🔙 Back", "Back"])
 def handle_back(message):
-    main_menu(message.chat.id)
-    uid = message.from_user.id
+    main_menu([message.chat.id](http://message.chat.id))
+    uid = [message.from_user.id](http://message.from_user.id)
     user_states.pop(uid, None)
     active_orders.pop(uid, None)
 
-# ─── Services Menu ────────────────────────────────────────────────────
-
-@bot.message_handler(func=lambda m: m.text == "📋 Services")
-def show_service_list(message):
+[@bot](https://x.com/bot).message_handler(func=lambda m: m.text == "📋 Services")
+def show_categories(message):
     markup = types.InlineKeyboardMarkup(row_width=2)
     for key, serv in SERVICES.items():
         markup.add(types.InlineKeyboardButton(
             f"{serv['emoji']} {serv['name']}",
             callback_data=f"cat_{key}"
         ))
-    bot.send_message(message.chat.id, "Select service category:", reply_markup=markup)
+    bot.send_message([message.chat.id](http://message.chat.id), "Select service category:", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("cat_"))
+[@bot](https://x.com/bot).callback_query_handler(func=lambda call: call.data.startswith("cat_"))
 def show_tiers(call):
     cat_key = call.data[4:]
     category = SERVICES.get(cat_key)
     if not category:
-        return bot.answer_callback_query(call.id, "Category not found.", show_alert=True)
+        return bot.answer_callback_query([call.id](http://call.id), "Category not found.", show_alert=True)
 
     markup = types.InlineKeyboardMarkup(row_width=1)
     for tier_key, tier in category["tiers"].items():
@@ -302,20 +299,18 @@ def show_tiers(call):
 
     bot.edit_message_text(
         f"{category['emoji']} {category['name']}\n\nChoose package:",
-        call.message.chat.id,
+        [call.message.chat.id](http://call.message.chat.id),
         call.message.message_id,
         reply_markup=markup
     )
 
-# ─── Order Creation ───────────────────────────────────────────────────
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("tier_"))
-def start_order_form(call):
+[@bot](https://x.com/bot).callback_query_handler(func=lambda call: call.data.startswith("tier_"))
+def start_order(call):
     _, cat_key, tier_key = call.data.split("_")
     cat = SERVICES[cat_key]
     tier = cat["tiers"][tier_key]
 
-    uid = call.from_user.id
+    uid = [call.from_user.id](http://call.from_user.id)
     active_orders[uid] = {
         "cat_key": cat_key,
         "tier_key": tier_key,
@@ -336,11 +331,9 @@ def start_order_form(call):
         reply_markup=nav()
     )
 
-# ─── Form Steps ───────────────────────────────────────────────────────
-
-@bot.message_handler(func=lambda m: m.from_user.id in user_states)
-def form_handler(m):
-    uid = m.from_user.id
+[@bot](https://x.com/bot).message_handler(func=lambda m: [m.from_user.id](http://m.from_user.id) in user_states)
+def process_form(m):
+    uid = [m.from_user.id](http://m.from_user.id)
     text = m.text.strip()
     state = user_states.get(uid)
 
@@ -351,15 +344,14 @@ def form_handler(m):
         return
 
     order = active_orders.get(uid)
-    if not order:
-        return main_menu(uid)
+    if not order: return main_menu(uid)
 
-    def err(msg):
+    def reply_error(msg):
         bot.send_message(uid, msg, reply_markup=nav())
 
     if state == "project_name":
         if not 3 <= len(text) <= 80:
-            return err("Project name should be 3–80 characters.")
+            return reply_error("Project name should be 3–80 characters.")
         order["fields"]["project"] = text
         user_states[uid] = "contract_addr"
         bot.send_message(uid, "Token / contract address (or N/A):", reply_markup=nav())
@@ -368,16 +360,16 @@ def form_handler(m):
         t = text.strip().upper()
         if t in ["", "N/A"]:
             order["fields"]["contract"] = "N/A"
-        elif re.match(r'^0x[a-fA-F0-9]{40}$', t) or re.match(r'^[1-9A-HJ-NP-Za-km-z]{32,44}$', t):
+        elif re.match(r'^0x[a-fA-F0-9]{40}`\(', t) or re.match(r'^[1-9A-HJ-NP-Za-km-z]{32,44}\)`', t):
             order["fields"]["contract"] = t
         else:
-            return err("Invalid address. Use N/A if not launched yet.")
+            return reply_error("Invalid address. Use N/A if not launched yet.")
         user_states[uid] = "blockchain"
         bot.send_message(uid, "Blockchain (SOL, ETH, BSC, BASE…):", reply_markup=nav())
 
     elif state == "blockchain":
         if not 2 <= len(text) <= 15:
-            return err("Blockchain name 2–15 characters.")
+            return reply_error("Blockchain name 2–15 characters.")
         order["fields"]["chain"] = text.upper()
         user_states[uid] = "budget"
         bot.send_message(uid, "Marketing budget (USD):", reply_markup=nav())
@@ -385,28 +377,24 @@ def form_handler(m):
     elif state == "budget":
         try:
             val = float(text.replace(",", "").replace("$", ""))
-            if val <= 0:
-                raise ValueError
+            if val <= 0: raise ValueError
             order["fields"]["budget"] = f"${val:,.0f}"
         except:
-            return err("Enter valid positive number.")
+            return reply_error("Enter valid positive number.")
         user_states[uid] = "telegram_link"
-        bot.send_message(uid, "Telegram group/channel (@ or https://t.me/...):", reply_markup=nav())
+        bot.send_message(uid, "Telegram group/channel (@ or [https://t.me/](https://t.me/)...):", reply_markup=nav())
 
     elif state == "telegram_link":
         t = text.strip()
-        if t.lower().startswith(("https://t.me/", "t.me/", "@")):
+        if t.lower().startswith(("[https://t.me/](https://t.me/)", "[t.me/](http://t.me/)", "@")):
             order["fields"]["telegram"] = t
-            show_summary(uid)
+            show_order_summary(uid)
         else:
-            err("Telegram link must start with @ or https://t.me/")
+            reply_error("Telegram link must start with @ or [https://t.me/](https://t.me/)")
 
-# ─── Order Summary & Confirmation ─────────────────────────────────────
-
-def show_summary(uid):
+def show_order_summary(uid):
     o = active_orders.get(uid)
-    if not o:
-        return
+    if not o: return
 
     lines = [
         "┌──────────────────────────────────────┐",
@@ -425,28 +413,22 @@ def show_summary(uid):
         "Is this correct?"
     ]
 
-    bot.send_message(
-        uid,
-        "\n".join(lines),
-        reply_markup=yesno("submit")
-    )
-    user_states[uid] = "confirm"
+    bot.send_message(uid, "\n".join(lines), reply_markup=yesno("submit"))
 
-@bot.callback_query_handler(func=lambda c: c.data in ["y_submit", "n_submit"])
-def confirm_order(c):
-    uid = c.from_user.id
+[@bot](https://x.com/bot).callback_query_handler(func=lambda c: c.data in ["y_submit", "n_submit"])
+def handle_submit(c):
+    uid = [c.from_user.id](http://c.from_user.id)
 
     if c.data == "n_submit":
-        bot.edit_message_text("Cancelled.", c.message.chat.id, c.message.message_id)
+        bot.edit_message_text("Cancelled.", [c.message.chat.id](http://c.message.chat.id), c.message.message_id)
         user_states.pop(uid, None)
         active_orders.pop(uid, None)
         return main_menu(uid)
 
     o = active_orders.get(uid)
-    if not o:
-        return
+    if not o: return
 
-    admin_text = [
+    admin_lines = [
         f"NEW ORDER  •  {uid}  •  {time.strftime('%Y-%m-%d %H:%M')}",
         f"Service   : {o['service']} – {o['tier_name']}",
         f"Price     : {'Custom' if o['price']==0 else f'${o['price']:,}'}",
@@ -458,145 +440,153 @@ def confirm_order(c):
         f"Telegram  : {o['fields'].get('telegram')}",
     ]
 
-    bot.send_message(ADMIN_ID, "\n".join(admin_text))
+    bot.send_message(ADMIN_ID, "\n".join(admin_lines))
 
     if o["price"] > 0:
-        mk = types.InlineKeyboardMarkup(row_width=3)
+        markup = types.InlineKeyboardMarkup(row_width=3)
         for k in PAYMENT_METHODS:
-            mk.add(types.InlineKeyboardButton(k, callback_data=f"pay_{k}"))
+            markup.add(types.InlineKeyboardButton(k, callback_data=f"pay_{k}"))
 
         bot.edit_message_text(
-            "Order received.\nPlease complete payment to begin.",
-            c.message.chat.id, c.message.message_id
+            "Order received.\nPlease complete payment to begin preparation.",
+            [c.message.chat.id](http://c.message.chat.id), c.message.message_id
         )
 
         bot.send_message(
             uid,
             f"Amount due: **${o['price']:,}**\n\nSelect payment network:",
             parse_mode="Markdown",
-            reply_markup=mk
+            reply_markup=markup
         )
         user_states[uid] = "choose_payment"
     else:
         bot.edit_message_text(
-            "Custom proposal submitted.\nTeam will contact you soon.",
-            c.message.chat.id, c.message.message_id
+            "Custom / rev-share proposal received.\nTeam will contact you soon.",
+            [c.message.chat.id](http://c.message.chat.id), c.message.message_id
         )
         user_states.pop(uid, None)
         active_orders.pop(uid, None)
 
-# ─── Payment Flow ─────────────────────────────────────────────────────
+[@bot](https://x.com/bot).callback_query_handler(func=lambda c: c.data.startswith("pay_"))
+def show_payment(c):
+    uid = [c.from_user.id](http://c.from_user.id)
+    network = c.data[4:]
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith("pay_"))
-def payment_screen(c):
-    uid = c.from_user.id
-    net = c.data[4:]
-
-    if uid not in active_orders or net not in PAYMENT_METHODS:
-        bot.answer_callback_query(c.id, "Session expired.", show_alert=True)
+    if uid not in active_orders or network not in PAYMENT_METHODS:
+        bot.answer_callback_query([c.id](http://c.id), "Session expired or invalid network.", show_alert=True)
         return main_menu(uid)
 
-    o = active_orders[uid]
-    pay = PAYMENT_METHODS[net]
+    order = active_orders[uid]
+    pay = PAYMENT_METHODS[network]
 
-    msg = (
-        "💳 **Payment Details**\n\n"
-        f"Amount: **${o['price']:,}**\n"
-        f"Network: **{pay['name']}**\n\n"
-        "Send **exactly** this amount to:\n\n"
-        f"```
-{pay['symbol']} {pay['name']}
-{pay['addr']}
-```\n\n"
-        "• Double-check address\n"
-        "• No tag/memo needed\n"
-        "• Reply here with TX hash after sending\n"
-        "• Verification: 10–60 min usually\n\n"
-        "Reply with transaction hash:"
+    # Fixed: no triple backticks inside f-string → using concatenation
+    payment_message = (
+        "💳 **Payment Instructions**\n\n"
+        "Amount: **$" + str(order["price"]) + "**\n"
+        "Network: **" + pay["name"] + "**\n\n"
+        "Send **exactly** this amount to the following address:\n\n"
+        + pay["symbol"] + " " + pay["name"] + "\n"
+        "`" + pay["addr"] + "`\n\n"
+        "Important:\n"
+        "• Double-check the address before sending\n"
+        "• No memo/tag required\n"
+        "• After sending, **reply to this message** with the transaction hash (TXID)\n"
+        "• Manual verification usually 10–60 minutes\n\n"
+        "Reply with TX hash when done."
     )
 
-    bot.send_message(uid, msg, parse_mode="Markdown", reply_markup=nav())
-    user_states[uid] = "tx_hash"
-    o["payment_net"] = net
+    bot.send_message(uid, payment_message, parse_mode="Markdown", reply_markup=nav())
+    user_states[uid] = "await_tx"
+    order["payment_network"] = network
 
-[@bot](https://x.com/bot).message_handler(func=lambda m: user_states.get([m.from_user.id](http://m.from_user.id)) == "tx_hash")
-def tx_input(m):
+[@bot](https://x.com/bot).message_handler(func=lambda m: user_states.get([m.from_user.id](http://m.from_user.id)) == "await_tx")
+def receive_tx(m):
     uid = [m.from_user.id](http://m.from_user.id)
-    tx = m.text.strip()
+    tx_hash = m.text.strip()
 
-    if len(tx) < 20:
-        return bot.send_message(uid, "TX hash too short. Send full hash.", reply_markup=nav())
+    if len(tx_hash) < 20:
+        return bot.send_message(uid, "TX hash looks too short. Please send the full transaction ID.", reply_markup=nav())
 
-    active_orders[uid]["tx"] = tx
+    active_orders[uid]["tx_hash"] = tx_hash
 
-    mk = types.InlineKeyboardMarkup(row_width=2)
-    mk.add(
-        types.InlineKeyboardButton("✔️ Correct", callback_data="y_tx"),
-        types.InlineKeyboardButton("✖️ Edit",    callback_data="n_tx")
+    confirm_markup = types.InlineKeyboardMarkup(row_width=2)
+    confirm_markup.add(
+        types.InlineKeyboardButton("✔️ Yes, correct", callback_data="y_tx_confirm"),
+        types.InlineKeyboardButton("✖️ No, edit",    callback_data="n_tx_confirm")
     )
 
-    preview = (
+    preview_msg = (
         "Payment Confirmation\n\n"
         f"Amount   : **${active_orders[uid]['price']:,}**\n"
-        f"Network  : **{PAYMENT_METHODS[active_orders[uid]['payment_net']]['name']}**\n"
-        f"TX       : `{tx}`\n\n"
-        "Is the TX hash correct?"
+        f"Network  : **{PAYMENT_METHODS[active_orders[uid]['payment_network']]['name']}**\n"
+        f"TX Hash  : `{tx_hash}`\n\n"
+        "Is the transaction hash correct?"
     )
 
-    bot.send_message(uid, preview, parse_mode="Markdown", reply_markup=mk)
-    user_states[uid] = "tx_confirm"
+    bot.send_message(uid, preview_msg, parse_mode="Markdown", reply_markup=confirm_markup)
+    user_states[uid] = "confirm_tx"
 
-[@bot](https://x.com/bot).callback_query_handler(func=lambda c: c.data in ["y_tx", "n_tx"])
-def tx_final(c):
+[@bot](https://x.com/bot).callback_query_handler(func=lambda c: c.data in ["y_tx_confirm", "n_tx_confirm"])
+def finalize_tx(c):
     uid = [c.from_user.id](http://c.from_user.id)
 
-    if c.data == "n_tx":
-        bot.edit_message_text("Send correct TX hash.", [c.message.chat.id](http://c.message.chat.id), c.message.message_id, reply_markup=nav())
-        user_states[uid] = "tx_hash"
+    if c.data == "n_tx_confirm":
+        bot.edit_message_text(
+            "You can reply with the correct TX hash now.",
+            [c.message.chat.id](http://c.message.chat.id),
+            c.message.message_id,
+            reply_markup=nav()
+        )
+        user_states[uid] = "await_tx"
         return
 
-    o = active_orders.get(uid)
-    admin_msg = (
-        f"💰 PAYMENT SUBMITTED\n"
-        f"User: {uid}\n"
-        f"Service: {o['service']} – {o['tier_name']}\n"
-        f"Amount: ${o['price']:,}\n"
-        f"Network: {o['payment_net']}\n"
-        f"TX: `{o.get('tx')}`\n"
-        f"Project: {o['fields'].get('project')}"
+    order = active_orders.get(uid)
+    if not order: return
+
+    admin_payment = (
+        f"💰 PAYMENT SUBMITTED (pending confirm)\n"
+        f"User     : {uid}\n"
+        f"Service  : {order['service']} – {order['tier_name']}\n"
+        f"Amount   : ${order['price']:,}\n"
+        f"Network  : {order.get('payment_network')}\n"
+        f"TX       : `{order.get('tx_hash')}`\n"
+        f"Project  : {order['fields'].get('project')}"
     )
-    bot.send_message(ADMIN_ID, admin_msg, parse_mode="Markdown")
+
+    bot.send_message(ADMIN_ID, admin_payment, parse_mode="Markdown")
 
     bot.edit_message_text(
-        "Payment submitted.\nVerification in progress (10–60 min).\nYou will be notified when confirmed.\nThank you!",
-        [c.message.chat.id](http://c.message.chat.id), c.message.message_id
+        "Thank you!\n"
+        "Payment has been submitted and is under review.\n"
+        "You will receive confirmation once verified.\n\n"
+        "Thank you for choosing PF Raid Whales.",
+        [c.message.chat.id](http://c.message.chat.id),
+        c.message.message_id
     )
 
     user_states.pop(uid, None)
-    # active_orders.pop(uid, None)   # keep for logs if desired
-
-# ─── Support ──────────────────────────────────────────────────────────
+    # active_orders.pop(uid, None)   # keep if you want logs
 
 [@bot](https://x.com/bot).message_handler(func=lambda m: m.text == "🛎️ Support")
-def support_entry(m):
+def support_mode(m):
     uid = [m.from_user.id](http://m.from_user.id)
     support_queue.add(uid)
     bot.send_message(
         uid,
-        "Type your message / question now.\nIt will be sent to the team.",
+        "Please type your question or message.\nIt will be forwarded to the team.",
         reply_markup=nav()
     )
 
 [@bot](https://x.com/bot).message_handler(func=lambda m: [m.from_user.id](http://m.from_user.id) in support_queue)
-def forward_support(m):
+def forward_to_admin(m):
     uid = [m.from_user.id](http://m.from_user.id)
-    msg = m.text.strip()
-    bot.send_message(ADMIN_ID, f"SUPPORT from {uid}:\n\n{msg}")
-    bot.send_message(uid, "Message sent. Team will reply soon.")
+    text = m.text.strip()
+    bot.send_message(ADMIN_ID, f"SUPPORT FROM {uid}:\n\n{text}")
+    bot.send_message(uid, "Your message has been sent. We will reply soon.")
     support_queue.discard(uid)
     main_menu(uid)
 
-# ─── Bot Start ────────────────────────────────────────────────────────
+# ─── Start ────────────────────────────────────────────────────────────
 
 print(f"{BOT_NAME} started – {time.ctime()}")
 bot.infinity_polling(timeout=20, long_polling_timeout=15)
