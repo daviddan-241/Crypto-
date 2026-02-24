@@ -1,9 +1,8 @@
-# render.yaml
 services:
   - type: web
-    name: pf-raid-whales-bot
+    name: pf-raid-whales
     env: python
-    plan: free   # or starter if you need more uptime
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     healthCheckPath: /health
@@ -11,5 +10,3 @@ services:
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
-      - key: PORT
-        from: PORT
