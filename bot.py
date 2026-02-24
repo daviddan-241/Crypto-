@@ -1,318 +1,311 @@
-# bot.py
-import os
-import sys
-import time
-import threading
-import requests
-from filelock import FileLock
+import os, time, threading, re
 from telebot import TeleBot, types
 from flask import Flask
 
 app = Flask(__name__)
 
 @app.route('/')
-def home():
-    return f"PF Raid Whales Bot - Running since {time.strftime('%Y-%m-%d %H:%M:%S')}"
+def home(): return f"PF Raid Whales – {time.strftime('%Y-%m-%d %H:%M:%S')}"
 
 @app.route('/health')
-def health():
-    return {"status": "ok"}, 200
+def health(): return {"status": "ok"}, 200
 
-# Run Flask in background
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT",10000)), debug=False, use_reloader=False), daemon=True).start()
 
-threading.Thread(target=run_flask, daemon=True).start()
+# ────────────────────────────────────────────────
+TOKEN = "8765151932:AAHUJ2WtV_Uc-GYW2b8uQARtfPyXwm2qIC0"
+ADMIN = 5578314612
+NAME  = "PF Raid Whales"
+IMG   = "https://i.ibb.co/bj0fnN56/IMG-1994.jpg"
 
-# ===========================================
-# BOT CONFIG
-# ===========================================
-BOT_TOKEN = "8765151932:AAHUJ2WtV_Uc-GYW2b8uQARtfPyXwm2qIC0"
-ADMIN_ID = 5578314612
-BOT_NAME = "PF Raid Whales"
-
-bot = TeleBot(BOT_TOKEN)
-
-user_states = {}
-user_orders = {}
-
-PAY_ADDRESSES = {
-    "BTC": {"addr": "bc1q85h3kkdkevl5w2vkgs5el37swkcca35sth2kkw", "emoji": "₿", "name": "Bitcoin"},
-    "ETH": {"addr": "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A", "emoji": "⛓️", "name": "Ethereum"},
-    "SOL": {"addr": "EaFeqxptPuo2jy3dA8dRsgRz8JRCPSK5mXT3qZZYT7f3", "emoji": "◎", "name": "Solana"}
+PAY = {
+    "BTC": {"a": "bc1q85h3kkdkevl5w2vkgs5el37swkcca35sth2kkw", "e": "₿", "n": "Bitcoin"},
+    "ETH": {"a": "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A", "e": "⛓️", "n": "Ethereum"},
+    "SOL": {"a": "EaFeqxptPuo2jy3dA8dRsgRz8JRCPSK5mXT3qZZYT7f3", "e": "◎", "n": "Solana"}
 }
 
-# Navigation
-def nav():
-    m = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    m.add("🔙 Back", "🔝 Main Menu 🔝")
+bot = TeleBot(TOKEN)
+states, orders = {}, {}
+
+def nav(): 
+    m = types.ReplyKeyboardMarkup(resize_keyboard=True,row_width=2)
+    m.add("Back", "Main Menu")
     return m
 
-def yesno(act):
+def yn(act): 
     m = types.InlineKeyboardMarkup(row_width=2)
-    m.add(
-        types.InlineKeyboardButton("✅ Yes", callback_data=f"yes_{act}"),
-        types.InlineKeyboardButton("❌ No", callback_data=f"no_{act}")
-    )
+    m.add(types.InlineKeyboardButton("Yes", callback_data=f"y_{act}"),
+          types.InlineKeyboardButton("No",  callback_data=f"n_{act}"))
     return m
 
-def main_menu(cid):
+def menu(cid):
     m = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    m.add("📦 Services", "📞 Support")
-    bot.send_message(cid, f"🌟 *{BOT_NAME}* 🌟\n\nSelect below 👇", parse_mode="Markdown", reply_markup=m)
+    m.add("Services", "Support")
+    bot.send_photo(cid, IMG, caption=f"*{NAME}*\nProfessional Web3 Growth Services\nSelect below.", parse_mode="Markdown", reply_markup=m)
 
-# Services – low prices
 SERVICES = {
-    "token_marketing": {"name": "🚀 Token Marketing", "tiers": {
-        "micro":   {"n": "Micro",   "p": 25,  "d": "basic push"},
-        "starter": {"n": "Starter", "p": 70,  "d": "socials + calls"},
-        "growth":  {"n": "Growth",  "p": 180, "d": "KOLs + trending"},
-        "elite":   {"n": "Elite",   "p": 450, "d": "full campaign"}
+    "token_marketing": {"n": "Token Marketing", "t": {
+        "m": {"n": "Micro",   "p": 49,  "d": "Basic exposure – 48h"},
+        "s": {"n": "Starter", "p": 149, "d": "Socials + calls + TG"},
+        "g": {"n": "Growth",  "p": 399, "d": "Mid KOLs + trending"},
+        "e": {"n": "Elite",   "p": 999, "d": "Top influencers + volume"}
     }},
-    "raiding_service": {"name": "⚔️ Raiding", "tiers": {
-        "micro":   {"n": "Micro",   "p": 30,  "d": "1 day"},
-        "starter": {"n": "Starter", "p": 80,  "d": "1–2 days"},
-        "growth":  {"n": "Growth",  "p": 200, "d": "3–5 days"},
-        "elite":   {"n": "Elite",   "p": 500, "d": "7+ days"}
+    "raiding": {"n": "Raiding Service", "t": {
+        "m": {"n": "Micro",   "p": 59,  "d": "1-day raid"},
+        "s": {"n": "Starter", "p": 149, "d": "1–2 days TG/Discord"},
+        "g": {"n": "Growth",  "p": 349, "d": "3–5 days coordinated"},
+        "e": {"n": "Elite",   "p": 899, "d": "7+ days full raid"}
     }},
-    "calls_promotion": {"name": "📣 Calls", "tiers": {
-        "micro":   {"n": "Micro",   "p": 20,  "d": "few calls"},
-        "starter": {"n": "Starter", "p": 60,  "d": "5–10 calls"},
-        "growth":  {"n": "Growth",  "p": 150, "d": "mid-tier"},
-        "elite":   {"n": "Elite",   "p": 400, "d": "premium"}
+    "calls": {"n": "Shill Calls", "t": {
+        "m": {"n": "Micro",   "p": 39,  "d": "2–4 small groups"},
+        "s": {"n": "Starter", "p": 99,  "d": "5–10 calls"},
+        "g": {"n": "Growth",  "p": 249, "d": "Mid-tier + timing"},
+        "e": {"n": "Elite",   "p": 649, "d": "Premium network"}
     }},
-    "dex_trending": {"name": "🔥 DEX Trending", "tiers": {
-        "micro":   {"n": "Micro",   "p": 40,  "d": "small bump"},
-        "starter": {"n": "Starter", "p": 100, "d": "basic push"},
-        "growth":  {"n": "Growth",  "p": 250, "d": "multi-DEX"},
-        "elite":   {"n": "Elite",   "p": 600, "d": "sustained"}
+    "dex_trend": {"n": "DEX Trending", "t": {
+        "m": {"n": "Micro",   "p": 69,  "d": "Basic bump"},
+        "s": {"n": "Starter", "p": 169, "d": "Raydium/Jupiter push"},
+        "g": {"n": "Growth",  "p": 399, "d": "Multi-DEX trending"},
+        "e": {"n": "Elite",   "p": 999, "d": "Sustained + volume"}
     }},
-    "influencer_outreach": {"name": "🤝 KOL Outreach", "tiers": {
-        "micro":   {"n": "Micro",   "p": 50,  "d": "2–3 micro"},
-        "starter": {"n": "Starter", "p": 140, "d": "3–5 micro"},
-        "growth":  {"n": "Growth",  "p": 350, "d": "8–12 mid"},
-        "elite":   {"n": "Elite",   "p": 850, "d": "15+ top"}
+    "kol": {"n": "KOL Outreach", "t": {
+        "m": {"n": "Micro",   "p": 99,  "d": "2–3 micro KOLs"},
+        "s": {"n": "Starter", "p": 249, "d": "3–5 small KOLs"},
+        "g": {"n": "Growth",  "p": 599, "d": "8–12 mid-tier"},
+        "e": {"n": "Elite",   "p": 1499,"d": "15+ top-tier"}
     }},
-    "nft_promotion": {"name": "🎨 NFT Promo", "tiers": {
-        "micro":   {"n": "Micro",   "p": 40,  "d": "basic shill"},
-        "starter": {"n": "Starter", "p": 110, "d": "NFT promo"},
-        "growth":  {"n": "Growth",  "p": 270, "d": "mint hype"},
-        "elite":   {"n": "Elite",   "p": 650, "d": "full launch"}
+    "nft": {"n": "NFT Promotion", "t": {
+        "m": {"n": "Micro",   "p": 55,  "d": "Basic shill"},
+        "s": {"n": "Starter", "p": 149, "d": "NFT promo"},
+        "g": {"n": "Growth",  "p": 349, "d": "Mint hype"},
+        "e": {"n": "Elite",   "p": 899, "d": "Full launch"}
     }},
-    "meme_listing": {"name": "😂 Meme Listing", "tiers": {
-        "micro":   {"n": "Micro",   "p": 20,  "d": "quick push"},
-        "starter": {"n": "Starter", "p": 60,  "d": "listing help"},
-        "growth":  {"n": "Growth",  "p": 140, "d": "trending"},
-        "elite":   {"n": "Elite",   "p": 350, "d": "viral"}
+    "meme": {"n": "Meme Coin Push", "t": {
+        "m": {"n": "Micro",   "p": 29,  "d": "Quick push"},
+        "s": {"n": "Starter", "p": 79,  "d": "Listing + push"},
+        "g": {"n": "Growth",  "p": 199, "d": "Trending support"},
+        "e": {"n": "Elite",   "p": 499, "d": "Viral campaign"}
     }},
-    "token_verification": {"name": "✅ Verification", "tiers": {
-        "micro":   {"n": "Micro",   "p": 15,  "d": "basic"},
-        "starter": {"n": "Starter", "p": 45,  "d": "blue check"},
-        "growth":  {"n": "Growth",  "p": 110, "d": "advanced"},
-        "elite":   {"n": "Elite",   "p": 280, "d": "premium"}
+    "verify": {"n": "Token Verification", "t": {
+        "m": {"n": "Micro",   "p": 25,  "d": "Basic check"},
+        "s": {"n": "Starter", "p": 69,  "d": "Blue check"},
+        "g": {"n": "Growth",  "p": 169, "d": "Advanced"},
+        "e": {"n": "Elite",   "p": 399, "d": "Premium + audit"}
     }},
-    "token_pumping": {"name": "📈 Pumping", "tiers": {
-        "micro":   {"n": "Micro",   "p": 60,  "d": "light pump"},
-        "starter": {"n": "Starter", "p": 160, "d": "volume pump"},
-        "growth":  {"n": "Growth",  "p": 380, "d": "strong"},
-        "elite":   {"n": "Elite",   "p": 950, "d": "sustained"}
+    "pump": {"n": "Token Pumping", "t": {
+        "m": {"n": "Micro",   "p": 79,  "d": "Light pump"},
+        "s": {"n": "Starter", "p": 199, "d": "Volume pump"},
+        "g": {"n": "Growth",  "p": 499, "d": "Strong push"},
+        "e": {"n": "Elite",   "p": 1199,"d": "Sustained"}
     }},
-    "dex_listing": {"name": "📊 DEX Listing", "tiers": {
-        "micro":   {"n": "Micro",   "p": 35,  "d": "basic"},
-        "starter": {"n": "Starter", "p": 90,  "d": "listing help"},
-        "growth":  {"n": "Growth",  "p": 220, "d": "fast + promo"},
-        "elite":   {"n": "Elite",   "p": 550, "d": "premium"}
+    "dex_list": {"n": "DEX Listing", "t": {
+        "m": {"n": "Micro",   "p": 49,  "d": "Basic help"},
+        "s": {"n": "Starter", "p": 129, "d": "Listing support"},
+        "g": {"n": "Growth",  "p": 299, "d": "Fast + promo"},
+        "e": {"n": "Elite",   "p": 749, "d": "Premium"}
     }},
-    "birdeye_listing": {"name": "👁 Birdeye", "tiers": {
-        "micro":   {"n": "Micro",   "p": 30,  "d": "basic"},
-        "starter": {"n": "Starter", "p": 80,  "d": "fast listing"},
-        "growth":  {"n": "Growth",  "p": 190, "d": "advanced"},
-        "elite":   {"n": "Elite",   "p": 480, "d": "premium"}
+    "birdeye": {"n": "Birdeye Listing", "t": {
+        "m": {"n": "Micro",   "p": 39,  "d": "Basic push"},
+        "s": {"n": "Starter", "p": 99,  "d": "Fast listing"},
+        "g": {"n": "Growth",  "p": 249, "d": "Advanced"},
+        "e": {"n": "Elite",   "p": 599, "d": "Premium"}
     }},
-    "twitter_shilling": {"name": "🐦 Twitter Shill", "tiers": {
-        "micro":   {"n": "Micro",   "p": 35,  "d": "basic posts"},
-        "starter": {"n": "Starter", "p": 90,  "d": "campaign"},
-        "growth":  {"n": "Growth",  "p": 210, "d": "strong hype"},
-        "elite":   {"n": "Elite",   "p": 520, "d": "viral"}
+    "twitter": {"n": "Twitter Shilling", "t": {
+        "m": {"n": "Micro",   "p": 45,  "d": "Basic posts"},
+        "s": {"n": "Starter", "p": 119, "d": "Campaign"},
+        "g": {"n": "Growth",  "p": 289, "d": "Strong hype"},
+        "e": {"n": "Elite",   "p": 699, "d": "Viral"}
     }},
-    "revenue_share_marketing": {"name": "💰 Rev Share", "tiers": {
-        "custom": {"n": "Custom", "p": 0, "d": "performance based"}
+    "volume_bot": {"n": "Volume Bot Setup", "t": {
+        "m": {"n": "Micro",   "p": 89,  "d": "Basic setup"},
+        "s": {"n": "Starter", "p": 229, "d": "Short-term"},
+        "g": {"n": "Growth",  "p": 549, "d": "Advanced run"},
+        "e": {"n": "Elite",   "p": 1299,"d": "Custom + anti-detect"}
+    }},
+    "rev_share": {"n": "Revenue Share Deal", "t": {
+        "c": {"n": "Custom", "p": 0, "d": "Performance based"}
     }}
 }
 
-TIER_REQUIREMENTS = {
+EXTRA = {
     "token_marketing": {
-        "growth":  [{"f":"audience","p":"Target audience?"}, {"f":"reach","p":"Reach goal?"}],
-        "elite":   [{"f":"audience","p":"Target audience?"}, {"f":"reach","p":"Reach goal?"}, {"f":"platforms","p":"Platforms?"}]
+        "g": [{"f":"aud","p":"Target audience?"}, {"f":"reach","p":"Reach goal?"}],
+        "e": [{"f":"aud","p":"Target audience?"}, {"f":"reach","p":"Reach goal?"}, {"f":"plat","p":"Platforms?"}]
     },
-    "raiding_service": {
-        "growth":  [{"f":"days","p":"Days of raiding?"}],
-        "elite":   [{"f":"days","p":"Days?"}, {"f":"size","p":"Target group sizes?"}]
+    "raiding": {
+        "g": [{"f":"days","p":"Raiding days?"}],
+        "e": [{"f":"days","p":"Days?"}, {"f":"size","p":"Target group sizes?"}]
+    },
+    "calls": {
+        "g": [{"f":"calls","p":"Number of calls?"}],
+        "e": [{"f":"calls","p":"Calls?"}, {"f":"type","p":"Caller type?"}]
+    },
+    "dex_trend": {
+        "g": [{"f":"vol","p":"Target 24h volume?"}],
+        "e": [{"f":"vol","p":"24h volume?"}, {"f":"days","p":"Sustain days?"}]
     }
 }
 
-# Validation
 def vc(t): return t.strip() in ["N/A","n/a",""] or re.match(r'^0x[a-fA-F0-9]{40}$',t) or re.match(r'^[1-9A-HJ-NP-Za-km-z]{32,44}$',t)
 def vt(t): return t.lower().strip().startswith(('https://t.me/','t.me/','@'))
-def vb(t): return bool(re.match(r'^\d+(\.\d+)?$',t.strip())) and 0<float(t.strip())<=100000
-def vi(t): return t.isdigit() and 1<=int(t)<=100000
-
-# ===========================================
-# HANDLERS
-# ===========================================
+def vb(t): try: v=float(t.strip()); return 0<v<=100000 except: return False
+def vi(t): try: v=int(t.strip()); return 1<=v<=100000 except: return False
 
 @bot.message_handler(commands=['start'])
-def start(m):
-    main_menu(m.chat.id)
+def start(m): menu(m.chat.id)
 
-@bot.message_handler(func=lambda m: m.text in ["📦 Services", "Services"])
-def services(m):
-    mk = types.InlineKeyboardMarkup(row_width=1)
+@bot.message_handler(func=lambda m: m.text in ["Services"])
+def cats(m):
+    mk = types.InlineKeyboardMarkup(row_width=2)
     for k,v in SERVICES.items():
-        mk.add(types.InlineKeyboardButton(v["name"], callback_data=f"s_{k}"))
-    bot.send_message(m.chat.id, "Pick category:", reply_markup=mk)
+        mk.add(types.InlineKeyboardButton(v["n"], callback_data=f"c_{k}"))
+    bot.send_message(m.chat.id, "Select category:", reply_markup=mk)
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith("s_"))
+@bot.callback_query_handler(func=lambda c: c.data.startswith("c_"))
 def tiers(c):
     k = c.data[2:]
     s = SERVICES[k]
-    mk = types.InlineKeyboardMarkup(row_width=1)
-    for tk,tv in s["tiers"].items():
-        pr = "Custom" if tv["p"]==0 else f"${tv['p']}"
-        mk.add(types.InlineKeyboardButton(f"{tv['n']} – {pr}", callback_data=f"t_{k}_{tk}"))
-    bot.edit_message_text(f"{s['name']} tiers:", c.message.chat.id, c.message.message_id, reply_markup=mk)
+    mk = types.InlineKeyboardMarkup(row_width=2)
+    for tk,tv in s["t"].items():
+        p = "Custom" if tv["p"]==0 else f"${tv['p']}"
+        mk.add(types.InlineKeyboardButton(f"{tv['n']} – {p}\n{tv['d']}", callback_data=f"t_{k}_{tk}"))
+    bot.edit_message_text(f"{s['n']} – Choose package", c.message.chat.id, c.message.message_id, reply_markup=mk)
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("t_"))
-def pick_tier(c):
+def pick(c):
     _,sk,tk = c.data.split("_")
     s = SERVICES[sk]
-    t = s["tiers"][tk]
+    t = s["t"][tk]
     uid = c.from_user.id
-    user_orders[uid] = {"sk":sk,"tk":tk,"s":s["name"],"t":t["n"],"p":t["p"],"d":t["d"],"hist":["proj"]}
-    user_states[uid] = "proj"
-    bot.send_message(uid, f"{s['name']} – {t['n']}\n${t['p'] if t['p'] else 'Custom'}\n\nProject name?", reply_markup=nav())
+    orders[uid] = {"sk":sk,"tk":tk,"s":s["n"],"t":t["n"],"p":t["p"],"d":t["d"],"h":["proj"]}
+    states[uid] = "proj"
+    bot.send_message(uid, f"Selected: **{s['n']} – {t['n']}**\n{t['d']}\n\nProject name:", parse_mode="Markdown", reply_markup=nav())
 
-@bot.message_handler(func=lambda m: m.from_user.id in user_states)
-def flow(m):
+@bot.message_handler(func=lambda m: m.from_user.id in states)
+def collect(m):
     uid = m.from_user.id
-    st = user_states.get(uid)
+    st = states.get(uid)
     txt = m.text.strip()
-    if txt in ["🔙 Back","🔝 Main Menu 🔝"]: return
-    o = user_orders.setdefault(uid,{})
-    h = o.setdefault("hist",[])
+    if txt in ["Back","Main Menu"]: return
 
-    def e(msg):
-        bot.send_message(uid,f"❌ {msg}",reply_markup=nav())
+    o = orders.setdefault(uid,{})
+    h = o.setdefault("h",[])
+
+    def err(msg): bot.send_message(uid, msg, reply_markup=nav())
 
     h.append(st)
 
     if st=="proj":
-        if not 2<=len(txt)<=80: e("2–80 chars"); h.pop(); return
+        if not 2<=len(txt)<=80: err("2–80 chars"); h.pop(); return
         o["proj"]=txt
-        user_states[uid]="cont"
+        states[uid]="cont"
         bot.send_message(uid,"Contract (or N/A):",reply_markup=nav())
 
     elif st=="cont":
-        if not vc(txt): e("Invalid / use N/A"); h.pop(); return
+        if not vc(txt): err("Invalid / N/A"); h.pop(); return
         o["cont"]=txt.upper() if txt.lower()!="n/a" else "N/A"
-        user_states[uid]="chain"
-        bot.send_message(uid,"Chain (SOL/ETH/...):",reply_markup=nav())
+        states[uid]="chain"
+        bot.send_message(uid,"Blockchain:",reply_markup=nav())
 
     elif st=="chain":
-        if not 2<=len(txt)<=15: e("2–15 chars"); h.pop(); return
+        if not 2<=len(txt)<=15: err("2–15 chars"); h.pop(); return
         o["chain"]=txt.upper()
-        user_states[uid]="budg"
-        bot.send_message(uid,"Budget $ (number):",reply_markup=nav())
+        states[uid]="budg"
+        bot.send_message(uid,"Budget (USD):",reply_markup=nav())
 
     elif st=="budg":
-        if not vb(txt): e("Valid number please"); h.pop(); return
+        if not vb(txt): err("Valid number"); h.pop(); return
         o["budg"]=txt
-        user_states[uid]="tg"
-        bot.send_message(uid,"Telegram (@ or https://t.me/...):",reply_markup=nav())
+        states[uid]="tg"
+        bot.send_message(uid,"Telegram link:",reply_markup=nav())
 
     elif st=="tg":
-        if not vt(txt): e("Must be @ or t.me link"); h.pop(); return
+        if not vt(txt): err("Invalid link"); h.pop(); return
         o["tg"]=txt
-        ex = TIER_REQUIREMENTS.get(o["sk"],{}).get(o["tk"],[])
+        ex = EXTRA.get(o["sk"],{}).get(o["tk"],[])
         if ex:
             o["ex"]=ex
             o["exi"]=0
-            user_states[uid]="ex"
+            states[uid]="ex"
             bot.send_message(uid,ex[0]["p"],reply_markup=nav())
         else:
-            bot.send_message(uid,"Submit order?",reply_markup=yesno("ord"))
-            user_states[uid]="conf"
+            states[uid]="conf"
+            bot.send_message(uid,"Submit order?",reply_markup=yn("sub"))
 
     elif st=="ex":
-        ex = o["ex"]
-        i = o["exi"]
-        f = ex[i]["f"]
-        ok = True
-        if "days" in f or "count" in f: ok = vi(txt)
-        if not ok: e("Bad format"); h.pop(); return
+        ex=o["ex"]
+        i=o["exi"]
+        f=ex[i]["f"]
+        ok = vi(txt) if "days" in f or "count" in f else True
+        if not ok: err("Invalid number"); h.pop(); return
         o[f]=txt
         if i+1<len(ex):
             o["exi"]+=1
             bot.send_message(uid,ex[i+1]["p"],reply_markup=nav())
         else:
-            bot.send_message(uid,"Submit order?",reply_markup=yesno("ord"))
-            user_states[uid]="conf"
+            states[uid]="conf"
+            bot.send_message(uid,"Submit order?",reply_markup=yn("sub"))
 
-@bot.callback_query_handler(func=lambda c: c.data.startswith(("yes_","no_")))
-def conf(c):
+@bot.callback_query_handler(func=lambda c: c.data.startswith(("y_","n_")))
+def cf(c):
     uid = c.from_user.id
-    a = c.data.split("_")[1]
-    if c.data.startswith("no_"):
-        bot.edit_message_text("Cancelled",c.message.chat.id,c.message.message_id)
+    act = c.data[2:]
+    if c.data.startswith("n_"):
+        bot.edit_message_text("Cancelled", c.message.chat.id, c.message.message_id)
         return
-    if a=="ord":
-        bot.edit_message_text("Order sent!",c.message.chat.id,c.message.message_id)
-        o = user_orders.get(uid,{})
+
+    if act == "sub":
+        bot.edit_message_text("Submitted.", c.message.chat.id, c.message.message_id)
+        o = orders.get(uid,{})
         lines = [f"ORDER {uid} | {o.get('s')} – {o.get('t')} | ${o.get('p')}"]
         for k in ["proj","cont","chain","budg","tg"]:
-            lines.append(f"{k}: {o.get(k,'–')}")
-        bot.send_message(ADMIN_ID,"\n".join(lines))
+            lines.append(f"{k.title()}: {o.get(k,'–')}")
+        for k in o:
+            if k not in ["sk","tk","s","t","p","d","h","ex","exi"]:
+                lines.append(f"{k.title()}: {o[k]}")
+        bot.send_message(ADMIN, "\n".join(lines))
+
         if o.get("p",0)>0:
             mk = types.InlineKeyboardMarkup(row_width=3)
-            for k in PAY_ADDRESSES: mk.add(types.InlineKeyboardButton(k,callback_data=f"p_{k}"))
-            bot.send_message(uid,f"Pay ${o['p']} – choose:",reply_markup=mk)
+            for k in PAY: mk.add(types.InlineKeyboardButton(k, callback_data=f"p_{k}"))
+            bot.send_message(uid, f"Fee: **${o['p']}**\nSelect network:", parse_mode="Markdown", reply_markup=mk)
         else:
-            reset_user(uid)
-    elif a=="tx":
-        tx = user_orders[uid].get("tx","")
-        bot.edit_message_text("TX sent – waiting",c.message.chat.id,c.message.message_id)
-        bot.send_message(ADMIN_ID,f"TX {uid}\n{o['s']} – {o['t']}\n${o['p']}\n{tx}")
+            bot.send_message(uid, "Custom order received. Team will contact you.")
+            del states[uid]; del orders[uid]
+
+    elif act == "tx":
+        tx = orders[uid].get("tx","")
+        bot.edit_message_text("TX submitted.", c.message.chat.id, c.message.message_id)
+        bot.send_message(ADMIN, f"TX {uid}\n{o['s']} – {o['t']}\n${o['p']}\nTX: {tx}")
 
 @bot.callback_query_handler(func=lambda c: c.data.startswith("p_"))
 def pay(c):
     ch = c.data[2:]
-    i = PAY_ADDRESSES[ch]
-    p = user_orders[c.from_user.id]["p"]
-    txt = f"Send ${p}\n\n{i['emoji']} {i['name']}\n`{i['addr']}`\n\nReply with TX hash"
-    bot.send_message(c.from_user.id,txt,parse_mode="Markdown",reply_markup=nav())
-    user_states[c.from_user.id]="tx"
+    i = PAY[ch]
+    p = orders[c.from_user.id]["p"]
+    msg = f"Send **${p}**:\n\n{i['e']} **{i['n']}**\n`{i['a']}`\n\nReply with TX hash."
+    bot.send_message(c.from_user.id, msg, parse_mode="Markdown", reply_markup=nav())
+    states[c.from_user.id] = "tx"
 
-@bot.message_handler(func=lambda m: user_states.get(m.from_user.id)=="tx")
-def txtx(m):
+@bot.message_handler(func=lambda m: states.get(m.from_user.id) == "tx")
+def tx(m):
     uid = m.from_user.id
     tx = m.text.strip()
-    user_orders[uid]["tx"]=tx
-    bot.send_message(uid,f"Confirm TX?\n`{tx}`",parse_mode="Markdown",reply_markup=yesno("tx"))
+    orders[uid]["tx"] = tx
+    bot.send_message(uid, f"Confirm TX?\n`{tx}`", parse_mode="Markdown", reply_markup=yn("tx"))
 
-@bot.message_handler(func=lambda m: m.text=="📞 Support")
-def sup(m):
-    bot.send_message(m.chat.id,"Message admin directly")
+@bot.message_handler(func=lambda m: m.text == "Support")
+def sup(m): bot.send_message(m.chat.id, "Contact admin directly.")
 
-@bot.message_handler(func=lambda m: m.text=="🔝 Main Menu 🔝")
-def mm(m):
-    bot.send_message(m.chat.id,"Return to menu?",reply_markup=yesno("mm"))
+@bot.message_handler(func=lambda m: m.text == "Main Menu")
+def mm(m): bot.send_message(m.chat.id, "Return to main menu?", reply_markup=yn("mm"))
 
-@bot.callback_query_handler(func=lambda c: c.data in ["yes_mm","no_mm"])
-def hmm(c):
-    if c.data=="yes_mm":
-        reset_user(c.from_user.id)
-        bot.edit_message_text("Main menu",c.message.chat.id,c.message.message_id)
+@bot.callback_query_handler(func=lambda c: c.data == "y_mm")
+def do_mm(c):
+    uid = c.from_user.id
+    del states[uid]; del orders[uid]
+    bot.edit_message_text("Main menu.", c.message.chat.id, c.message.message_id)
+    menu(c.message.chat.id)
 
-print(f"{BOT_NAME} started")
+print(f"{NAME} started")
 bot.infinity_polling(timeout=20, long_polling_timeout=15)
