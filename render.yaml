@@ -1,12 +1,14 @@
 services:
   - type: web
-    name: pf-raid-whales
+    name: pf-raid-whales-bot
     env: python
-    plan: free
+    plan: free    # or starter / team depending on your needs
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
+    autoDeploy: true
     healthCheckPath: /health
-    healthCheckTimeout: 30
     envVars:
-      - key: PYTHONUNBUFFERED
-        value: "1"
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      # Adsecrets if needed later (e.g. TOKEN as secret)
+```​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​​
