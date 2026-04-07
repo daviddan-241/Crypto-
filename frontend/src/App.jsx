@@ -6,6 +6,7 @@ import Services from './pages/Services'
 import Promote from './pages/Promote'
 import Support from './pages/Support'
 import CoinDetail from './pages/CoinDetail'
+import Trending from './pages/Trending'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +28,7 @@ function App() {
             <Route path="/promote" element={<Promote />} />
             <Route path="/support" element={<Support />} />
             <Route path="/coin/:id" element={<CoinDetail />} />
+            <Route path="/trending" element={<Trending />} />
           </Route>
         </Routes>
       </BrowserRouter>
