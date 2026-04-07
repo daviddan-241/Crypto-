@@ -25,7 +25,7 @@ def health():
 threading.Thread(
     target=lambda: app.run(
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
+        port=int(os.environ.get("PORT", 5000)),
         debug=False,
         use_reloader=False
     ),
@@ -33,7 +33,7 @@ threading.Thread(
 ).start()
 
 # ─── Bot Configuration ────────────────────────────────────────────────
-TOKEN       = "8765151932:AAHUJ2WtV_Uc-GYW2b8uQARtfPyXwm2qIC0"
+TOKEN       = os.environ.get("BOT_TOKEN", "")
 ADMIN_ID    = 8235324142               # ← change if needed
 BOT_NAME    = "PF Raid Whales"
 HEADER_IMG  = "https://i.ibb.co/bj0fnN56/IMG-1994.jpg"
