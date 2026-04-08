@@ -31,7 +31,7 @@ SUPPORT  = "@crypto_guy02"
 WALLETS = {
     "SOL": {"addr": os.environ.get("SOL_WALLET", "46ZKRuURaASKEcKBafnPZgMaTqBL8RK8TssZgZzFCBzn"), "sym": "◎", "name": "Solana"},
     "ETH": {"addr": os.environ.get("ETH_WALLET", "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A"),     "sym": "⟠", "name": "Ethereum"},
-    "BNB": {"addr": os.environ.get("BNB_WALLET",  "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A"),    "sym": "🟡", "name": "BNB Chain"},
+    "BNB": {"addr": os.environ.get("BNB_WALLET",  "bnb189gjjucwltdpnlemrveakf0q6xg0smfqdh6869"),    "sym": "🟡", "name": "BNB Chain"},
 }
 
 DEXSCREENER = "https://api.dexscreener.com/latest/dex"
