@@ -1,7 +1,6 @@
 import os
 import time
 import threading
-import re
 import requests
 
 from telebot import TeleBot, types
@@ -22,32 +21,262 @@ threading.Thread(
     daemon=True
 ).start()
 
-TOKEN = os.environ.get("BOT_TOKEN", "")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", "8235324142"))
-DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
-SITE_URL = os.environ.get("SITE_URL", "https://nomics.replit.app")
-ALPHA_GROUP = "https://t.me/+QJVQUQIhP-82ZDk8"
-BOT_USERNAME = "@Cariz_bot"
-HEADER_IMG = "https://i.ibb.co/bj0fnN56/IMG-1994.jpg"
+TOKEN     = os.environ.get("BOT_TOKEN", "")
+ADMIN_ID  = int(os.environ.get("ADMIN_ID", "8235324142"))
+DISCORD   = os.environ.get("DISCORD_WEBHOOK_URL", "")
+SITE_URL  = os.environ.get("SITE_URL", "https://nomics.replit.app")
+ALPHA_URL = "https://t.me/+QJVQUQIhP-82ZDk8"
+SUPPORT   = "@crypto_guy02"
 
-PAYMENT_METHODS = {
-    "BTC": {"addr": "bc1q85h3kkdkevl5w2vkgs5el37swkcca35sth2kkw", "symbol": "₿", "name": "Bitcoin"},
-    "ETH": {"addr": os.environ.get("ETH_WALLET", "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A"), "symbol": "⛓️", "name": "Ethereum"},
-    "SOL": {"addr": os.environ.get("SOL_WALLET", "46ZKRuURaASKEcKBafnPZgMaTqBL8RK8TssZgZzFCBzn"), "symbol": "◎", "name": "Solana"},
-    "BNB": {"addr": os.environ.get("BNB_WALLET", "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A"), "symbol": "🟡", "name": "BNB Chain"},
+WALLETS = {
+    "SOL": {"addr": os.environ.get("SOL_WALLET", "46ZKRuURaASKEcKBafnPZgMaTqBL8RK8TssZgZzFCBzn"),  "sym": "◎",  "name": "Solana"},
+    "ETH": {"addr": os.environ.get("ETH_WALLET", "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A"),     "sym": "⟠",  "name": "Ethereum"},
+    "BNB": {"addr": os.environ.get("BNB_WALLET",  "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A"),    "sym": "🟡", "name": "BNB Chain"},
 }
 
-DEXSCREENER_BASE = "https://api.dexscreener.com/latest/dex"
+DEXSCREENER = "https://api.dexscreener.com/latest/dex"
+COINGECKO   = "https://api.coingecko.com/api/v3"
 
 bot = TeleBot(TOKEN) if TOKEN else None
 
-user_states = {}
+user_states   = {}
 active_orders = {}
 support_queue = set()
 
+SERVICES = {
+    "premium_listing": {
+        "emoji": "🔥", "name": "Premium Token Listing", "needs_ca": True,
+        "desc": "Instant listing on Nomics with full promotion, 200 boost points, and daily exposure to thousands of traders.",
+        "tiers": {
+            "standard": {"n": "Standard",  "p": 150,  "d": "Instant listing + 24h promoted highlight + 200 boost points"},
+            "featured":  {"n": "Featured",  "p": 350,  "d": "Standard + Token of the Day + newsletter feature", "best": True},
+            "elite":     {"n": "Elite",     "p": 799,  "d": "Featured + KOL signal + 7-day trending boost"},
+        }
+    },
+    "dex_trending": {
+        "emoji": "📈", "name": "DEX Trending Push", "needs_ca": True,
+        "desc": "Push your token to the top of DEX trending charts across Raydium, Jupiter, Uniswap and more.",
+        "tiers": {
+            "basic": {"n": "Basic", "p": 99,  "d": "24h single-DEX visibility boost"},
+            "pro":   {"n": "Pro",   "p": 299, "d": "72h multi-DEX trending campaign", "best": True},
+            "elite": {"n": "Elite", "p": 799, "d": "7-day sustained trending + volume acceleration"},
+        }
+    },
+    "calls": {
+        "emoji": "📣", "name": "Shill Calls & Promotion", "needs_ca": True,
+        "desc": "Coordinated caller campaigns across Telegram, Discord & social media for maximum signal exposure.",
+        "tiers": {
+            "micro":   {"n": "Micro",    "p": 149, "d": "3-5 micro callers, 50K+ combined reach"},
+            "mid":     {"n": "Mid-Tier", "p": 399, "d": "8-12 quality callers, 250K+ reach", "best": True},
+            "premium": {"n": "Premium",  "p": 999, "d": "20+ established callers, 1M+ reach"},
+        }
+    },
+    "alpha": {
+        "emoji": "🔑", "name": "Alpha Group Access", "needs_ca": False,
+        "desc": "Exclusive private channel for early gem calls, insider DEX signals & priority listing alerts.",
+        "tiers": {
+            "monthly":   {"n": "Monthly",   "p": 99,  "d": "30 days full alpha access"},
+            "quarterly": {"n": "Quarterly", "p": 249, "d": "90 days full alpha access (save $48)", "best": True},
+            "lifetime":  {"n": "Lifetime",  "p": 599, "d": "Permanent access — best value forever"},
+        }
+    },
+    "volume_bot": {
+        "emoji": "🤖", "name": "Volume Bot Infrastructure", "needs_ca": True,
+        "desc": "Professional managed volume generation to build market momentum and improve DEX rankings.",
+        "tiers": {
+            "starter": {"n": "Starter",  "p": 199,  "d": "24h basic volume rotation"},
+            "growth":  {"n": "Growth",   "p": 599,  "d": "72h managed volume + buy simulation", "best": True},
+            "premium": {"n": "Premium",  "p": 1499, "d": "7-day advanced custom volume system"},
+        }
+    },
+    "kol": {
+        "emoji": "👥", "name": "KOL / Influencer Outreach", "needs_ca": True,
+        "desc": "Connect with our verified network of crypto influencers for maximum reach and credibility.",
+        "tiers": {
+            "micro":   {"n": "Micro",    "p": 299,  "d": "3-4 micro influencers, 100K+ reach"},
+            "mid":     {"n": "Mid-Tier", "p": 799,  "d": "6-9 mid-tier KOLs, 500K+ reach", "best": True},
+            "premium": {"n": "Premium",  "p": 1999, "d": "20+ high-tier KOLs, 2M+ reach"},
+        }
+    },
+    "dex_tools": {
+        "emoji": "🛠", "name": "DEX Tools & Analytics", "needs_ca": False,
+        "desc": "Professional DEX analytics, real-time token scanning, whale alerts and custom monitoring dashboards.",
+        "tiers": {
+            "basic":    {"n": "Basic",    "p": 79,  "d": "Token scanner + basic chart access"},
+            "advanced": {"n": "Advanced", "p": 249, "d": "Full analytics, holder tracking, whale alerts", "best": True},
+            "pro":      {"n": "Pro",      "p": 649, "d": "Custom dashboard, API access, automated alerts"},
+        }
+    },
+    "promotion": {
+        "emoji": "📊", "name": "Full Promotion Package", "needs_ca": True,
+        "desc": "Complete multi-channel marketing campaign covering all major platforms simultaneously.",
+        "tiers": {
+            "basic":    {"n": "Basic",    "p": 129, "d": "Social media posts + 3 community shills"},
+            "standard": {"n": "Standard", "p": 349, "d": "Multi-platform + Twitter thread + TG push", "best": True},
+            "premium":  {"n": "Premium",  "p": 899, "d": "Full: KOL + trending + socials + TG wave"},
+        }
+    },
+    "twitter": {
+        "emoji": "𝕏", "name": "X / Twitter Campaign", "needs_ca": True,
+        "desc": "Structured Twitter/X marketing with organic reach strategies and influencer amplification.",
+        "tiers": {
+            "basic":  {"n": "Basic",  "p": 99,  "d": "5 posts + community engagement"},
+            "growth": {"n": "Growth", "p": 299, "d": "Daily tweets + thread + 10 KOL reposts", "best": True},
+            "viral":  {"n": "Viral",  "p": 799, "d": "Full X strategy + paid amplification"},
+        }
+    },
+    "meme": {
+        "emoji": "😂", "name": "Meme Coin Campaign", "needs_ca": True,
+        "desc": "Viral meme strategy specifically designed for memecoin projects for explosive growth.",
+        "tiers": {
+            "basic":     {"n": "Basic",     "p": 79,  "d": "Quick meme visibility + 5 viral posts"},
+            "viral":     {"n": "Viral",     "p": 249, "d": "Meme pack + community activation", "best": True},
+            "explosion": {"n": "Explosion", "p": 799, "d": "Full viral meme campaign with KOL + trending"},
+        }
+    },
+    "dex_listing": {
+        "emoji": "🔗", "name": "DEX Listing Support", "needs_ca": True,
+        "desc": "Fast-track your token listing on Raydium, Uniswap, Birdeye, and DexTools.",
+        "tiers": {
+            "basic": {"n": "Basic",        "p": 99,  "d": "Standard DEX listing assistance"},
+            "fast":  {"n": "Fast Track",   "p": 249, "d": "Priority DEX listing + initial promo", "best": True},
+            "full":  {"n": "Full Service", "p": 599, "d": "DEX + Birdeye + DexTools complete listing"},
+        }
+    },
+    "quick_pump": {
+        "emoji": "⚡", "name": "Quick Pump Campaign", "needs_ca": True,
+        "desc": "Rapid coordinated buy pressure campaign for fast momentum and price action.",
+        "tiers": {
+            "basic": {"n": "Basic", "p": 199,  "d": "24-48h call + volume burst"},
+            "pro":   {"n": "Pro",   "p": 599,  "d": "Calls + volume + TG raid combo", "best": True},
+            "elite": {"n": "Elite", "p": 1499, "d": "Aggressive 72h full momentum package"},
+        }
+    },
+}
+
+
+def get_crypto_prices():
+    try:
+        r = requests.get(
+            f"{COINGECKO}/simple/price",
+            params={"ids": "solana,ethereum,binancecoin", "vs_currencies": "usd"},
+            headers={"accept": "application/json"},
+            timeout=8
+        )
+        d = r.json()
+        return {
+            "SOL": float(d.get("solana", {}).get("usd", 140)),
+            "ETH": float(d.get("ethereum", {}).get("usd", 2500)),
+            "BNB": float(d.get("binancecoin", {}).get("usd", 600)),
+        }
+    except Exception:
+        return {"SOL": 140, "ETH": 2500, "BNB": 600}
+
+
+def usd_to_crypto(usd_amount, prices, currency):
+    if not usd_amount or usd_amount == 0:
+        return "Custom"
+    price = prices.get(currency, 1)
+    amount = usd_amount / price
+    if currency == "SOL":
+        return f"{amount:.3f} SOL"
+    elif currency == "ETH":
+        return f"{amount:.4f} ETH"
+    elif currency == "BNB":
+        return f"{amount:.3f} BNB"
+    return f"{amount:.4f} {currency}"
+
+
+def lookup_token(ca):
+    try:
+        r = requests.get(f"{DEXSCREENER}/tokens/{ca}", timeout=10)
+        data = r.json()
+        pairs = data.get("pairs", [])
+        if not pairs:
+            return None
+        pair = sorted(pairs, key=lambda p: float(p.get("liquidity", {}).get("usd", 0) or 0), reverse=True)[0]
+        base  = pair.get("baseToken", {})
+        info  = pair.get("info", {})
+        pc    = pair.get("priceChange", {})
+        vol   = pair.get("volume", {})
+
+        socials = info.get("socials", [])
+        websites = [w.get("url") for w in info.get("websites", []) if w.get("url")]
+        twitter = telegram = discord = ""
+        for s in socials:
+            t = s.get("type", "")
+            if t == "twitter":
+                twitter = s.get("url", "")
+            elif t == "telegram":
+                telegram = s.get("url", "")
+            elif t == "discord":
+                discord = s.get("url", "")
+
+        return {
+            "name":        base.get("name", ""),
+            "symbol":      base.get("symbol", ""),
+            "chain":       pair.get("chainId", ""),
+            "dex":         pair.get("dexId", ""),
+            "price":       pair.get("priceUsd", "0"),
+            "change_h1":   pc.get("h1", 0),
+            "change_h6":   pc.get("h6", 0),
+            "change_h24":  pc.get("h24", 0),
+            "volume_h24":  vol.get("h24", 0),
+            "liquidity":   pair.get("liquidity", {}).get("usd", 0),
+            "market_cap":  pair.get("marketCap", 0),
+            "fdv":         pair.get("fdv", 0),
+            "pair_url":    pair.get("url", ""),
+            "image":       info.get("imageUrl", ""),
+            "description": info.get("description", ""),
+            "website":     websites[0] if websites else "",
+            "twitter":     twitter,
+            "telegram":    telegram,
+            "discord":     discord,
+        }
+    except Exception:
+        return None
+
+
+def fmt_num(n):
+    try:
+        n = float(n or 0)
+        if n >= 1_000_000_000: return f"${n/1_000_000_000:.2f}B"
+        if n >= 1_000_000:     return f"${n/1_000_000:.2f}M"
+        if n >= 1_000:         return f"${n/1_000:.1f}K"
+        return f"${n:.2f}"
+    except Exception:
+        return "$0"
+
+
+def fmt_price(p):
+    try:
+        n = float(p or 0)
+        if n == 0: return "$0.00"
+        if n >= 1: return f"${n:,.4f}"
+        s = f"{n:.12f}"
+        i = s.find("0.", 0) + 2
+        zeros = 0
+        for c in s[i:]:
+            if c == "0": zeros += 1
+            else: break
+        sig = s[i+zeros:i+zeros+4].rstrip("0")
+        if zeros > 1:
+            return f"$0.0{zeros}{sig}"
+        return f"${n:.6f}"
+    except Exception:
+        return "$—"
+
+
+def fmt_pct(v):
+    try:
+        v = float(v or 0)
+        return f"▲ {v:.2f}%" if v >= 0 else f"▼ {abs(v):.2f}%"
+    except Exception:
+        return "—"
+
 
 def notify_discord(title, fields, color=0xf97316):
-    if not DISCORD_WEBHOOK:
+    if not DISCORD:
         return
     try:
         embed = {
@@ -55,695 +284,545 @@ def notify_discord(title, fields, color=0xf97316):
             "color": color,
             "fields": [{"name": k, "value": str(v)[:1024], "inline": True} for k, v in fields.items()],
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "footer": {"text": f"Nomics Bot • {BOT_USERNAME}"}
+            "footer": {"text": "Nomics Platform"}
         }
-        requests.post(DISCORD_WEBHOOK, json={"embeds": [embed]}, timeout=5)
+        requests.post(DISCORD, json={"embeds": [embed]}, timeout=5)
     except Exception:
         pass
 
 
-def lookup_token(ca):
-    try:
-        r = requests.get(f"{DEXSCREENER_BASE}/tokens/{ca}", timeout=8)
-        data = r.json()
-        pairs = data.get("pairs", [])
-        if not pairs:
-            return None
-        pair = sorted(pairs, key=lambda p: float(p.get("liquidity", {}).get("usd", 0) or 0), reverse=True)[0]
-        base = pair.get("baseToken", {})
-        liq = pair.get("liquidity", {}).get("usd", 0)
-        mc = pair.get("marketCap", 0)
-        price = pair.get("priceUsd", "0")
-        dex = pair.get("dexId", "")
-        chain = pair.get("chainId", "")
-        return {
-            "name": base.get("name", ""),
-            "symbol": base.get("symbol", ""),
-            "price": price,
-            "liquidity": liq,
-            "market_cap": mc,
-            "dex": dex,
-            "chain": chain,
-            "pair_url": pair.get("url", ""),
-        }
-    except Exception:
-        return None
+def nav_kb():
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    kb.add("🔙 Main Menu")
+    return kb
 
 
-def nav():
-    m = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    m.add("🔙 Back", "Main Menu 🔝")
-    return m
-
-
-def yesno(action):
-    m = types.InlineKeyboardMarkup(row_width=2)
-    m.add(
-        types.InlineKeyboardButton("✔️ Confirm", callback_data=f"y_{action}"),
-        types.InlineKeyboardButton("✖️ Cancel", callback_data=f"n_{action}")
-    )
-    return m
-
-
-SERVICES = {
-    "premium_listing": {
-        "emoji": "🔥",
-        "name": "Premium Token Listing",
-        "desc": "Get your token listed instantly on Nomics with full promotion.",
-        "tiers": {
-            "standard": {"n": "Standard", "p": 150, "d": "Instant listing + 24h highlighted + 200 boost points"},
-            "featured": {"n": "Featured", "p": 350, "d": "Standard + Token of the Day + Newsletter mention"},
-            "elite": {"n": "Elite", "p": 799, "d": "Featured + KOL signal + 7-day trending boost"},
-        }
-    },
-    "dex_trending": {
-        "emoji": "📈",
-        "name": "DEX Trending Push",
-        "desc": "Push your token to the top of DEX trending charts.",
-        "tiers": {
-            "basic": {"n": "Basic", "p": 99, "d": "24h single-DEX visibility boost"},
-            "pro": {"n": "Pro", "p": 299, "d": "72h multi-DEX trending (Raydium, Jupiter, Uniswap)"},
-            "elite": {"n": "Elite", "p": 799, "d": "7-day sustained trending + volume acceleration"},
-        }
-    },
-    "calls": {
-        "emoji": "📣",
-        "name": "Shill Calls & Promotion",
-        "desc": "Coordinated caller campaigns across Telegram and social media.",
-        "tiers": {
-            "micro": {"n": "Micro", "p": 149, "d": "3–5 micro caller groups, 50K+ combined reach"},
-            "mid": {"n": "Mid-Tier", "p": 399, "d": "8–12 quality callers, 250K+ combined reach"},
-            "premium": {"n": "Premium", "p": 999, "d": "20+ established callers, 1M+ combined reach"},
-        }
-    },
-    "alpha_access": {
-        "emoji": "🔑",
-        "name": "Alpha Group Access",
-        "desc": "Exclusive private channel with early calls, gem alerts, insider signals.",
-        "tiers": {
-            "monthly": {"n": "Monthly", "p": 99, "d": f"30 days alpha access — {ALPHA_GROUP}"},
-            "quarterly": {"n": "Quarterly", "p": 249, "d": f"90 days alpha access — {ALPHA_GROUP}"},
-            "lifetime": {"n": "Lifetime", "p": 599, "d": f"Permanent alpha access — {ALPHA_GROUP}"},
-        }
-    },
-    "volume_bot": {
-        "emoji": "🤖",
-        "name": "Volume Bot Infrastructure",
-        "desc": "Professional managed volume generation to build market momentum.",
-        "tiers": {
-            "starter": {"n": "Starter", "p": 199, "d": "24h basic volume rotation"},
-            "growth": {"n": "Growth", "p": 599, "d": "72h managed volume + buy simulation"},
-            "premium": {"n": "Premium", "p": 1499, "d": "7-day advanced custom volume system"},
-        }
-    },
-    "kol": {
-        "emoji": "👥",
-        "name": "KOL / Influencer Outreach",
-        "desc": "Connect with verified crypto influencers for maximum reach.",
-        "tiers": {
-            "micro": {"n": "Micro", "p": 299, "d": "3–4 micro influencers, 100K+ combined reach"},
-            "mid": {"n": "Mid-Tier", "p": 799, "d": "6–9 quality mid-tier KOLs, 500K+ reach"},
-            "premium": {"n": "Premium", "p": 1999, "d": "20+ high-tier KOL partnerships, 2M+ reach"},
-        }
-    },
-    "dex_tools": {
-        "emoji": "🛠️",
-        "name": "DEX Tools & Analytics",
-        "desc": "Professional DEX analytics, token scanning and monitoring.",
-        "tiers": {
-            "basic": {"n": "Basic", "p": 79, "d": "Token scanner, basic chart access"},
-            "advanced": {"n": "Advanced", "p": 249, "d": "Full DEX analytics, holder tracking, whale alerts"},
-            "pro": {"n": "Pro", "p": 649, "d": "Custom dashboard, API access, automated alerts"},
-        }
-    },
-    "promotion": {
-        "emoji": "📊",
-        "name": "Full Promotion Package",
-        "desc": "Complete multi-channel marketing campaign.",
-        "tiers": {
-            "basic": {"n": "Basic", "p": 129, "d": "Social media posts + 3 community shills"},
-            "standard": {"n": "Standard", "p": 349, "d": "Multi-platform campaign + Twitter thread + TG push"},
-            "premium": {"n": "Premium", "p": 899, "d": "Full campaign: KOL + trending + socials + Telegram wave"},
-        }
-    },
-    "dex_listing": {
-        "emoji": "🔗",
-        "name": "DEX Listing Support",
-        "desc": "Fast-track your token listing on major DEX platforms.",
-        "tiers": {
-            "basic": {"n": "Basic", "p": 99, "d": "Standard DEX listing assistance"},
-            "fast": {"n": "Fast Track", "p": 249, "d": "Priority DEX listing + initial promotion"},
-            "full": {"n": "Full Service", "p": 599, "d": "Complete DEX integration + Birdeye + DexTools listing"},
-        }
-    },
-    "meme_campaign": {
-        "emoji": "😂",
-        "name": "Meme Coin Campaign",
-        "desc": "Viral meme campaign strategy for memecoin projects.",
-        "tiers": {
-            "basic": {"n": "Basic", "p": 79, "d": "Quick meme visibility + 5 viral posts"},
-            "viral": {"n": "Viral", "p": 249, "d": "Meme pack + community activation + listing"},
-            "explosion": {"n": "Explosion", "p": 799, "d": "Full viral meme campaign with KOL + trending"},
-        }
-    },
-    "twitter_campaign": {
-        "emoji": "🐦",
-        "name": "X (Twitter) Campaign",
-        "desc": "Structured Twitter/X marketing with organic reach strategies.",
-        "tiers": {
-            "basic": {"n": "Basic", "p": 99, "d": "5 posts + community engagement"},
-            "growth": {"n": "Growth", "p": 299, "d": "Daily tweets + thread + 10 KOL reposts"},
-            "viral": {"n": "Viral", "p": 799, "d": "Full X strategy + paid amplification + trending hashtag"},
-        }
-    },
-    "quick_pump": {
-        "emoji": "⚡💰",
-        "name": "Quick Pump Coordination",
-        "desc": "Rapid coordinated buy pressure for fast momentum.",
-        "tiers": {
-            "basic": {"n": "Basic", "p": 199, "d": "24–48h call + volume burst"},
-            "pro": {"n": "Pro", "p": 599, "d": "Calls + volume + TG raid combo"},
-            "elite": {"n": "Elite", "p": 1499, "d": "Aggressive 72h full momentum package"},
-        }
-    },
-    "birdeye_boost": {
-        "emoji": "🦅",
-        "name": "Birdeye Listing & Boost",
-        "desc": "Get your token featured and boosted on Birdeye.",
-        "tiers": {
-            "basic": {"n": "Basic", "p": 79, "d": "Birdeye indexing + basic visibility"},
-            "boost": {"n": "Boost", "p": 199, "d": "Trending boost + fast Birdeye indexing"},
-            "premium": {"n": "Premium", "p": 499, "d": "Complete Birdeye optimization + featured slot"},
-        }
-    },
-    "buy_pressure": {
-        "emoji": "📈🛒",
-        "name": "Buy Pressure & Holder Growth",
-        "desc": "Increase buy pressure and grow your holder base.",
-        "tiers": {
-            "starter": {"n": "Starter", "p": 149, "d": "Basic buy simulation + incentives"},
-            "growth": {"n": "Growth", "p": 449, "d": "Moderate pressure + rewards system"},
-            "premium": {"n": "Premium", "p": 999, "d": "Strong buy simulation + holder growth campaign"},
-        }
-    },
-    "token_verify": {
-        "emoji": "✅",
-        "name": "Token Verification & Audit",
-        "desc": "Get your token verified and audited for credibility.",
-        "tiers": {
-            "basic": {"n": "Basic", "p": 49, "d": "Basic verification push"},
-            "standard": {"n": "Standard", "p": 149, "d": "Blue-check + DEX verification"},
-            "full": {"n": "Full Audit", "p": 399, "d": "Complete audit + verification + listings"},
-        }
-    },
-    "rev_share": {
-        "emoji": "🤝",
-        "name": "Revenue Share Partnership",
-        "desc": "Performance-based long-term partnership deal.",
-        "tiers": {
-            "custom": {"n": "Custom", "p": 0, "d": "Performance-based rev-share — contact us"},
-        }
-    },
-}
+def is_nav(text):
+    return text in ["🔙 Main Menu", "Main Menu", "🔙 Back", "Back", "/start"]
 
 
 def main_menu(cid):
+    prices = get_crypto_prices()
     txt = (
-        f"🚀 *Nomics — Web3 Marketing Platform*\n\n"
-        "The #1 platform for token listing, DEX trending, and crypto marketing.\n\n"
-        "📋 *Services Available:*\n"
-        "• 🔥 Premium Token Listing — from $150\n"
-        "• 📈 DEX Trending Push — from $99\n"
-        "• 📣 Shill Calls — from $149\n"
-        "• 🔑 Alpha Group Access — from $99/mo\n"
-        "• 🤖 Volume Bot — from $199\n"
-        "• 👥 KOL / Influencer — from $299\n"
-        "• 🛠️ DEX Tools — from $79\n"
-        "• 📊 Full Promotion — from $129\n"
-        "• And 8 more services...\n\n"
-        f"🌐 Platform: {SITE_URL}\n"
-        f"🤖 Bot: {BOT_USERNAME}\n\n"
-        "Select an option to get started:"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ *NOMICS — Web3 Marketing*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "_Professional token marketing, listing & growth services._\n\n"
+        "📌 *Live Crypto Prices*\n"
+        f"◎ SOL  `${prices['SOL']:,.2f}`\n"
+        f"⟠ ETH  `${prices['ETH']:,.2f}`\n"
+        f"🟡 BNB  `${prices['BNB']:,.2f}`\n\n"
+        "📋 *Our Services*\n"
+        "🔥 Premium Listing — from $150\n"
+        "📈 DEX Trending — from $99\n"
+        "📣 Shill Calls — from $149\n"
+        "🔑 Alpha Access — from $99/mo\n"
+        "🤖 Volume Bot — from $199\n"
+        "👥 KOL Outreach — from $299\n"
+        "🛠 DEX Tools — from $79\n"
+        "⚡ Quick Pump — from $199\n"
+        "_...and 4 more services_\n\n"
+        f"🌐 {SITE_URL}"
     )
-    mk = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    mk.add("📋 Services", "🔑 Alpha Access", "🛎️ Support", "🌐 Website")
+    kb = types.InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        types.InlineKeyboardButton("📋 Browse Services",  callback_data="menu_services"),
+        types.InlineKeyboardButton("🔑 Alpha Access",     callback_data="menu_alpha"),
+    )
+    kb.add(
+        types.InlineKeyboardButton("📊 Live Prices",      callback_data="menu_prices"),
+        types.InlineKeyboardButton("💬 Support",          callback_data="menu_support"),
+    )
+    kb.add(
+        types.InlineKeyboardButton("🌐 Visit Platform", url=SITE_URL),
+    )
     try:
-        bot.send_photo(cid, HEADER_IMG, caption=txt, parse_mode="Markdown", reply_markup=mk)
+        bot.send_message(cid, txt, parse_mode="Markdown", reply_markup=kb)
     except Exception:
-        bot.send_message(cid, txt, parse_mode="Markdown", reply_markup=mk)
+        pass
 
 
 if bot:
-    @bot.message_handler(commands=['start'])
-    def cmd_start(message):
-        uid = message.from_user.id
-        username = message.from_user.username or "N/A"
+
+    @bot.message_handler(commands=["start"])
+    def cmd_start(msg):
+        uid = msg.from_user.id
+        username = msg.from_user.username or "N/A"
         notify_discord(
-            "👤 NEW USER — Bot Started",
-            {"User ID": str(uid), "Username": f"@{username}", "Time": time.strftime("%Y-%m-%d %H:%M UTC")},
+            "👤 NEW USER",
+            {"User": str(uid), "Username": f"@{username}", "Time": time.strftime("%Y-%m-%d %H:%M UTC")},
             color=0x22c55e
         )
-        main_menu(message.chat.id)
+        main_menu(msg.chat.id)
 
-    @bot.message_handler(func=lambda m: m.text in ["Main Menu 🔝", "Main Menu"])
-    def return_main(message):
-        main_menu(message.chat.id)
-        uid = message.from_user.id
-        user_states.pop(uid, None)
-        active_orders.pop(uid, None)
-
-    @bot.message_handler(func=lambda m: m.text in ["🔙 Back", "Back"])
-    def handle_back(message):
-        uid = message.from_user.id
-        user_states.pop(uid, None)
-        active_orders.pop(uid, None)
-        main_menu(message.chat.id)
-
-    @bot.message_handler(func=lambda m: m.text == "🌐 Website")
-    def show_website(message):
-        bot.send_message(message.chat.id, f"🌐 Visit Nomics: {SITE_URL}", reply_markup=nav())
-
-    @bot.message_handler(func=lambda m: m.text == "🔑 Alpha Access")
-    def show_alpha(message):
-        alpha_kb = types.InlineKeyboardMarkup(row_width=1)
-        alpha_kb.add(
-            types.InlineKeyboardButton("Monthly — $99/mo", callback_data="alpha_monthly"),
-            types.InlineKeyboardButton("Quarterly — $249 (save $48)", callback_data="alpha_quarterly"),
-            types.InlineKeyboardButton("Lifetime — $599 (best value)", callback_data="alpha_lifetime"),
+    @bot.callback_query_handler(func=lambda c: c.data == "menu_services")
+    def cb_services(c):
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        for key, s in SERVICES.items():
+            kb.add(types.InlineKeyboardButton(f"{s['emoji']}  {s['name']}", callback_data=f"svc_{key}"))
+        kb.add(types.InlineKeyboardButton("🔙 Back", callback_data="menu_home"))
+        bot.edit_message_text(
+            "📋 *Select a Service*\n\n_Tap any service to see packages and pricing._",
+            c.message.chat.id, c.message.message_id,
+            parse_mode="Markdown", reply_markup=kb
         )
-        text = (
+        bot.answer_callback_query(c.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "menu_home")
+    def cb_home(c):
+        bot.delete_message(c.message.chat.id, c.message.message_id)
+        main_menu(c.message.chat.id)
+        bot.answer_callback_query(c.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "menu_prices")
+    def cb_prices(c):
+        prices = get_crypto_prices()
+        txt = (
+            "📊 *Live Crypto Prices*\n\n"
+            f"◎ *SOL* — `${prices['SOL']:,.2f}`\n"
+            f"⟠ *ETH* — `${prices['ETH']:,.2f}`\n"
+            f"🟡 *BNB* — `${prices['BNB']:,.2f}`\n\n"
+            "_Prices refresh each time you open this._"
+        )
+        kb = types.InlineKeyboardMarkup()
+        kb.add(types.InlineKeyboardButton("🔙 Back", callback_data="menu_home"))
+        bot.edit_message_text(txt, c.message.chat.id, c.message.message_id, parse_mode="Markdown", reply_markup=kb)
+        bot.answer_callback_query(c.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "menu_support")
+    def cb_support(c):
+        txt = (
+            "💬 *Support*\n\n"
+            "For help with orders, listings, or any questions:\n\n"
+            f"📩 Message us directly: {SUPPORT}\n\n"
+            "_Our team typically responds within a few hours._"
+        )
+        kb = types.InlineKeyboardMarkup()
+        kb.add(types.InlineKeyboardButton(f"📩 Message {SUPPORT}", url=f"https://t.me/crypto_guy02"))
+        kb.add(types.InlineKeyboardButton("🔙 Back", callback_data="menu_home"))
+        bot.edit_message_text(txt, c.message.chat.id, c.message.message_id, parse_mode="Markdown", reply_markup=kb)
+        bot.answer_callback_query(c.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "menu_alpha")
+    def cb_alpha(c):
+        prices = get_crypto_prices()
+        tiers = SERVICES["alpha"]["tiers"]
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        for tk, tier in tiers.items():
+            sol = usd_to_crypto(tier["p"], prices, "SOL")
+            eth = usd_to_crypto(tier["p"], prices, "ETH")
+            best = " ⭐" if tier.get("best") else ""
+            kb.add(types.InlineKeyboardButton(
+                f"{tier['n']}{best} — ${tier['p']:,}  |  {sol}  ·  {eth}",
+                callback_data=f"alphapay_{tk}"
+            ))
+        kb.add(types.InlineKeyboardButton("🔙 Back", callback_data="menu_home"))
+        txt = (
             "🔑 *Alpha Group Access*\n\n"
-            "Join our exclusive private alpha channel for:\n\n"
+            "_Exclusive private channel — early gem calls, insider DEX signals, priority listing slots._\n\n"
             "✅ Early gem calls before they pump\n"
             "✅ Insider DEX trending signals\n"
+            "✅ Direct KOL network access\n"
             "✅ Volume bot strategy tips\n"
-            "✅ Direct access to KOL network\n"
             "✅ Priority listing slots\n"
             "✅ Daily market alpha & analysis\n\n"
-            f"🔗 Group: {ALPHA_GROUP}\n\n"
             "Choose your plan:"
         )
-        bot.send_message(message.chat.id, text, parse_mode="Markdown", reply_markup=alpha_kb)
+        bot.edit_message_text(txt, c.message.chat.id, c.message.message_id, parse_mode="Markdown", reply_markup=kb)
+        bot.answer_callback_query(c.id)
 
-    @bot.message_handler(func=lambda m: m.text == "📋 Services")
-    def show_categories(message):
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        for key, serv in SERVICES.items():
-            markup.add(types.InlineKeyboardButton(
-                f"{serv['emoji']} {serv['name']}",
-                callback_data=f"cat_{key}"
-            ))
-        bot.send_message(message.chat.id,
-            "📋 *Select a Service Category*\n\nAll services require a contract address (CA) to proceed.",
-            parse_mode="Markdown",
-            reply_markup=markup)
-
-    @bot.message_handler(func=lambda m: m.text == "🛎️ Support")
-    def support_mode(m):
-        uid = m.from_user.id
-        support_queue.add(uid)
-        bot.send_message(uid,
-            "💬 *Support Mode Active*\n\nType your question or message and our team will respond shortly.\nInclude your token CA if relevant.",
-            parse_mode="Markdown",
-            reply_markup=nav())
-
-    @bot.message_handler(func=lambda m: m.from_user.id in support_queue)
-    def forward_to_admin(m):
-        uid = m.from_user.id
-        text = m.text.strip()
-        if text in ["🔙 Back", "Back", "Main Menu 🔝", "Main Menu"]:
-            support_queue.discard(uid)
-            return main_menu(uid)
-        notify_discord(
-            "💬 SUPPORT MESSAGE",
-            {"User": str(uid), "Username": f"@{m.from_user.username or 'N/A'}", "Message": text[:500]},
-            color=0x22c55e
-        )
-        try:
-            bot.send_message(ADMIN_ID, f"💬 *Support*\nFrom: {uid} (@{m.from_user.username or 'N/A'})\n`{text}`", parse_mode="Markdown")
-        except Exception:
-            pass
-        support_queue.discard(uid)
-        bot.send_message(uid, "✅ Message sent! Team will respond soon.", reply_markup=nav())
-
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("cat_"))
-    def show_tiers(call):
-        cat_key = call.data[4:]
-        category = SERVICES.get(cat_key)
-        if not category:
-            return bot.answer_callback_query(call.id, "Category not found.", show_alert=True)
-
-        uid = call.from_user.id
-        active_orders[uid] = {"cat_key": cat_key, "service": category["name"]}
-        user_states[uid] = "need_ca"
-
-        bot.send_message(
-            uid,
-            f"{category['emoji']} *{category['name']}*\n\n{category['desc']}\n\n"
-            "📝 Please enter your *token contract address (CA)* to proceed.\n\n"
-            "This is required to verify your token and customize the service.",
-            parse_mode="Markdown",
-            reply_markup=nav()
-        )
-        bot.answer_callback_query(call.id)
-
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("tier_"))
-    def start_order(call):
-        parts = call.data.split("_", 2)
-        if len(parts) < 3:
-            return
-        cat_key = parts[1]
-        tier_key = parts[2]
-        cat = SERVICES.get(cat_key)
-        if not cat:
-            return
-        tier = cat["tiers"].get(tier_key)
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("alphapay_"))
+    def cb_alphapay(c):
+        plan = c.data.replace("alphapay_", "")
+        tier = SERVICES["alpha"]["tiers"].get(plan)
         if not tier:
-            return
+            return bot.answer_callback_query(c.id, "Not found.", show_alert=True)
+        prices = get_crypto_prices()
+        uid = c.from_user.id
+        active_orders[uid] = {"type": "alpha", "plan": plan, "tier": tier["n"], "price": tier["p"]}
 
-        uid = call.from_user.id
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        for cur, w in WALLETS.items():
+            amt = usd_to_crypto(tier["p"], prices, cur)
+            kb.add(types.InlineKeyboardButton(f"{w['sym']} Pay {amt} ({cur})", callback_data=f"alphacur_{plan}_{cur}"))
+        kb.add(types.InlineKeyboardButton("🔙 Back", callback_data="menu_alpha"))
+
+        txt = (
+            f"🔑 *Alpha Access — {tier['n']}*\n\n"
+            f"{tier['d']}\n\n"
+            f"💰 *Price: ${tier['p']:,} USD*\n\n"
+            f"◎ SOL  `{usd_to_crypto(tier['p'], prices, 'SOL')}`\n"
+            f"⟠ ETH  `{usd_to_crypto(tier['p'], prices, 'ETH')}`\n"
+            f"🟡 BNB  `{usd_to_crypto(tier['p'], prices, 'BNB')}`\n\n"
+            "Select payment currency:"
+        )
+        bot.edit_message_text(txt, c.message.chat.id, c.message.message_id, parse_mode="Markdown", reply_markup=kb)
+        bot.answer_callback_query(c.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("alphacur_"))
+    def cb_alphacur(c):
+        parts = c.data.split("_")
+        plan  = parts[1] if len(parts) > 1 else "monthly"
+        cur   = parts[2] if len(parts) > 2 else "SOL"
+        tier  = SERVICES["alpha"]["tiers"].get(plan)
+        if not tier:
+            return bot.answer_callback_query(c.id, "Not found.", show_alert=True)
+        uid   = c.from_user.id
+        prices = get_crypto_prices()
+        amt   = usd_to_crypto(tier["p"], prices, cur)
+        wallet = WALLETS[cur]
+
         order = active_orders.get(uid, {})
-        order.update({
-            "cat_key": cat_key,
-            "tier_key": tier_key,
-            "service": cat["name"],
-            "tier_name": tier["n"],
-            "price": tier["p"],
-            "desc": tier["d"],
-            "fields": order.get("fields", {}),
-        })
+        order.update({"currency": cur, "crypto_amount": amt, "wallet": wallet["addr"]})
         active_orders[uid] = order
-        user_states[uid] = "telegram_link"
+        user_states[uid] = "alpha_tx"
 
-        bot.send_message(
-            uid,
-            f"✅ *{cat['emoji']} {cat['name']} — {tier['n']}*\n{tier['d']}\nPrice: *{'Custom' if tier['p'] == 0 else f'${tier[\"p\"]:,}'}*\n\n"
-            "Please enter your *Telegram group/channel link* (@ or https://t.me/...):",
-            parse_mode="Markdown",
-            reply_markup=nav()
+        kb = types.InlineKeyboardMarkup()
+        kb.add(types.InlineKeyboardButton("🔙 Back", callback_data=f"alphapay_{plan}"))
+
+        txt = (
+            f"💳 *Payment — Alpha {tier['n']}*\n\n"
+            f"Amount:  `{amt}`\n"
+            f"Network: *{wallet['name']}*\n\n"
+            f"Send to address:\n`{wallet['addr']}`\n\n"
+            "After sending, reply here with your *transaction hash (TXID)*.\n"
+            "_Access granted within 30 minutes of confirmation._\n\n"
+            f"📌 Group link: {ALPHA_URL}"
         )
-        bot.answer_callback_query(call.id)
+        bot.send_message(uid, txt, parse_mode="Markdown", reply_markup=kb)
+        bot.answer_callback_query(c.id)
 
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("alpha_"))
-    def handle_alpha(call):
-        plan = call.data.replace("alpha_", "")
-        prices = {"monthly": 99, "quarterly": 249, "lifetime": 599}
-        price = prices.get(plan, 99)
-        plan_label = plan.capitalize()
-        uid = call.from_user.id
-
-        notify_discord(
-            "🔑 ALPHA ACCESS ORDER",
-            {"Plan": plan_label, "Price": f"${price}", "User": str(uid), "Username": f"@{call.from_user.username or 'N/A'}"},
-            color=0xa855f7
-        )
-
-        pay_kb = types.InlineKeyboardMarkup(row_width=2)
-        for k, v in PAYMENT_METHODS.items():
-            pay_kb.add(types.InlineKeyboardButton(f"Pay with {k}", callback_data=f"apay_{plan}_{k}"))
-
-        text = (
-            f"🔑 *Alpha Access — {plan_label}*\n\n"
-            f"Price: *${price}*\n\n"
-            "Choose your payment method:"
-        )
-        bot.edit_message_caption(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown", reply_markup=pay_kb) if call.message.caption else bot.send_message(uid, text, parse_mode="Markdown", reply_markup=pay_kb)
-        bot.answer_callback_query(call.id)
-
-    @bot.callback_query_handler(func=lambda call: call.data.startswith("apay_"))
-    def alpha_payment(call):
-        parts = call.data.split("_")
-        plan = parts[1] if len(parts) > 1 else "monthly"
-        network = parts[2] if len(parts) > 2 else "SOL"
-        prices = {"monthly": 99, "quarterly": 249, "lifetime": 599}
-        price = prices.get(plan, 99)
-        uid = call.from_user.id
-
-        pay = PAYMENT_METHODS.get(network, PAYMENT_METHODS["SOL"])
-        text = (
-            f"💳 *Alpha Access Payment*\n\n"
-            f"Plan: *{plan.capitalize()}* — *${price}*\n"
-            f"Network: *{pay['name']}*\n\n"
-            f"Send to:\n`{pay['addr']}`\n\n"
-            "After sending, reply with your *TX hash* and we'll grant you access:\n\n"
-            f"🔗 Group link: {ALPHA_GROUP}\n\n"
-            "Access granted within 30 minutes of confirmation."
-        )
-        bot.send_message(uid, text, parse_mode="Markdown", reply_markup=nav())
-        user_states[uid] = "await_alpha_tx"
-        active_orders[uid] = {"type": "alpha", "plan": plan, "price": price, "network": network}
-        bot.answer_callback_query(call.id)
-
-    @bot.message_handler(func=lambda m: user_states.get(m.from_user.id) == "await_alpha_tx")
-    def receive_alpha_tx(m):
-        uid = m.from_user.id
-        tx = m.text.strip()
+    @bot.message_handler(func=lambda m: user_states.get(m.from_user.id) == "alpha_tx")
+    def handle_alpha_tx(m):
+        uid  = m.from_user.id
+        tx   = m.text.strip()
+        if is_nav(tx):
+            user_states.pop(uid, None)
+            return main_menu(uid)
+        if len(tx) < 20:
+            return bot.send_message(uid, "❌ TX hash looks too short. Please send the full transaction ID.")
         order = active_orders.get(uid, {})
-
-        notify_discord(
-            "💰 ALPHA PAYMENT TX RECEIVED",
-            {"User": str(uid), "Username": f"@{m.from_user.username or 'N/A'}", "Plan": order.get("plan", "N/A"), "Price": f"${order.get('price', 0)}", "Network": order.get("network", "N/A"), "TX Hash": tx},
-            color=0xa855f7
-        )
+        notify_discord("🔑 ALPHA PAYMENT TX", {"Plan": order.get("tier"), "Price": f"${order.get('price')}", "Currency": order.get("currency"), "Amount": order.get("crypto_amount"), "TX": tx, "User": str(uid), "Username": f"@{m.from_user.username or 'N/A'}"}, color=0xa855f7)
         try:
-            bot.send_message(ADMIN_ID,
-                f"🔑 *Alpha Payment TX*\nUser: {uid} (@{m.from_user.username or 'N/A'})\nPlan: {order.get('plan')}\nPrice: ${order.get('price')}\nNetwork: {order.get('network')}\nTX: `{tx}`",
-                parse_mode="Markdown")
-        except Exception:
-            pass
-
+            bot.send_message(ADMIN_ID, f"🔑 *Alpha TX*\nPlan: {order.get('tier')}\nCurrency: {order.get('currency')}\nAmount: {order.get('crypto_amount')}\nTX: `{tx}`\nUser: {uid} (@{m.from_user.username or 'N/A'})", parse_mode="Markdown")
+        except Exception: pass
         user_states.pop(uid, None)
-        bot.send_message(uid,
-            f"✅ *Payment received!*\n\nTX submitted for verification. You'll receive alpha group access within 30 minutes:\n{ALPHA_GROUP}",
-            parse_mode="Markdown", reply_markup=nav())
+        bot.send_message(uid, f"✅ *Payment submitted!*\n\nWe'll verify your TX and add you to the alpha group within 30 minutes.\n\n📌 Group: {ALPHA_URL}", parse_mode="Markdown")
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("svc_"))
+    def cb_service(c):
+        key = c.data[4:]
+        svc = SERVICES.get(key)
+        if not svc:
+            return bot.answer_callback_query(c.id, "Not found.", show_alert=True)
+        uid = c.from_user.id
+        active_orders[uid] = {"svc_key": key, "service": svc["name"]}
+
+        if svc.get("needs_ca"):
+            user_states[uid] = "need_ca"
+            txt = (
+                f"{svc['emoji']} *{svc['name']}*\n\n"
+                f"_{svc['desc']}_\n\n"
+                "📝 *Enter your token contract address (CA)*\n\n"
+                "I'll fetch the token info from DexScreener automatically — name, price, liquidity, market cap, and social links."
+            )
+        else:
+            user_states[uid] = "choose_tier"
+            prices = get_crypto_prices()
+            kb = _tier_keyboard(key, svc, prices)
+            txt = (
+                f"{svc['emoji']} *{svc['name']}*\n\n"
+                f"_{svc['desc']}_\n\n"
+                "Choose your package:"
+            )
+            bot.send_message(uid, txt, parse_mode="Markdown", reply_markup=kb)
+            return bot.answer_callback_query(c.id)
+
+        bot.send_message(uid, txt, parse_mode="Markdown")
+        bot.answer_callback_query(c.id)
+
+    def _tier_keyboard(svc_key, svc, prices):
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        for tk, tier in svc["tiers"].items():
+            if tier["p"] == 0:
+                label = f"{tier['n']} — Custom (contact us)"
+            else:
+                sol = usd_to_crypto(tier["p"], prices, "SOL")
+                eth = usd_to_crypto(tier["p"], prices, "ETH")
+                best = " ⭐ Best Value" if tier.get("best") else ""
+                label = f"{tier['n']}{best} — ${tier['p']:,}  |  {sol}  ·  {eth}"
+            kb.add(types.InlineKeyboardButton(label, callback_data=f"tier_{svc_key}_{tk}"))
+        return kb
 
     @bot.message_handler(func=lambda m: user_states.get(m.from_user.id) == "need_ca")
-    def collect_ca(m):
-        uid = m.from_user.id
+    def handle_ca(m):
+        uid  = m.from_user.id
         text = m.text.strip()
-        if text in ["🔙 Back", "Back", "Main Menu 🔝", "Main Menu"]:
+        if is_nav(text):
             user_states.pop(uid, None)
             active_orders.pop(uid, None)
             return main_menu(uid)
 
-        ca = text
+        ca    = text
         order = active_orders.get(uid, {})
-        if "fields" not in order:
-            order["fields"] = {}
-        order["fields"]["ca"] = ca
+        order.setdefault("fields", {})["ca"] = ca
 
-        bot.send_message(uid, "🔍 Looking up your token on DexScreener...", reply_markup=nav())
+        bot.send_message(uid, "🔍 *Fetching token data from DexScreener…*", parse_mode="Markdown")
 
-        token_info = lookup_token(ca)
-        if token_info:
-            order["fields"]["token_name"] = token_info["name"]
-            order["fields"]["token_symbol"] = token_info["symbol"]
-            order["fields"]["token_chain"] = token_info["chain"]
-            order["fields"]["token_price"] = token_info["price"]
-            order["fields"]["token_liquidity"] = token_info["liquidity"]
-            order["fields"]["token_mc"] = token_info["market_cap"]
-            order["fields"]["token_dex"] = token_info["dex"]
+        tk    = lookup_token(ca)
+        svc_key = order.get("svc_key", "")
+        svc   = SERVICES.get(svc_key, {})
+        prices = get_crypto_prices()
+
+        if tk:
+            order["fields"].update({
+                "token_name":   tk["name"],
+                "token_symbol": tk["symbol"],
+                "token_chain":  tk["chain"],
+                "token_price":  tk["price"],
+                "token_mc":     tk["market_cap"],
+                "token_liq":    tk["liquidity"],
+                "token_dex":    tk["dex"],
+            })
             active_orders[uid] = order
 
-            cat_key = order.get("cat_key", "")
-            category = SERVICES.get(cat_key, {})
+            socials_line = ""
+            links = []
+            if tk.get("website"):  links.append(f"🌐 [Website]({tk['website']})")
+            if tk.get("twitter"):  links.append(f"𝕏 [Twitter]({tk['twitter']})")
+            if tk.get("telegram"): links.append(f"✈️ [Telegram]({tk['telegram']})")
+            if tk.get("discord"):  links.append(f"💬 [Discord]({tk['discord']})")
+            if tk.get("pair_url"): links.append(f"📊 [DexScreener]({tk['pair_url']})")
+            if links:
+                socials_line = "\n🔗 " + "  ·  ".join(links)
 
-            confirm_text = (
-                f"✅ *Token Found on DexScreener!*\n\n"
-                f"🪙 *{token_info['name']}* (${token_info['symbol']})\n"
-                f"🔗 Chain: {token_info['chain'].upper()}\n"
-                f"💰 Price: ${token_info['price']}\n"
-                f"💧 Liquidity: ${float(token_info['liquidity'] or 0):,.0f}\n"
-                f"📊 Market Cap: ${float(token_info['market_cap'] or 0):,.0f}\n"
-                f"🏪 DEX: {token_info['dex']}\n\n"
-                f"Now choose your *{category.get('name', 'service')}* tier:"
+            desc_line = f"\n📋 _{tk['description'][:160]}…_" if tk.get("description") else ""
+
+            h1  = fmt_pct(tk.get("change_h1"))
+            h24 = fmt_pct(tk.get("change_h24"))
+
+            txt = (
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"✅ *{tk['name']}* (${tk['symbol']})\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⛓  Chain:      `{tk['chain'].upper()}`\n"
+                f"🏪 DEX:        `{tk['dex'].upper()}`\n"
+                f"💰 Price:      `{fmt_price(tk['price'])}`\n"
+                f"📈 1H / 24H:  `{h1}`  /  `{h24}`\n"
+                f"💧 Liquidity:  `{fmt_num(tk['liquidity'])}`\n"
+                f"📊 Market Cap: `{fmt_num(tk['market_cap'])}`\n"
+                f"📦 Volume 24H: `{fmt_num(tk['volume_h24'])}`\n"
+                f"{desc_line}"
+                f"{socials_line}\n\n"
+                f"Choose your *{svc.get('name', 'service')}* package:"
             )
-
-            markup = types.InlineKeyboardMarkup(row_width=1)
-            for tier_key, tier in category.get("tiers", {}).items():
-                price_str = "Custom" if tier["p"] == 0 else f"${tier['p']:,}"
-                markup.add(types.InlineKeyboardButton(
-                    f"{tier['n']} — {price_str} | {tier['d'][:50]}",
-                    callback_data=f"tier_{cat_key}_{tier_key}"
-                ))
-
+            kb = _tier_keyboard(svc_key, svc, prices)
             user_states[uid] = "choose_tier"
-            bot.send_message(uid, confirm_text, parse_mode="Markdown", reply_markup=markup)
+            bot.send_message(uid, txt, parse_mode="Markdown", reply_markup=kb, disable_web_page_preview=True)
 
         else:
-            order["fields"]["token_name"] = "Manual Entry"
+            order["fields"]["token_name"] = "Unverified"
             active_orders[uid] = order
 
-            cat_key = order.get("cat_key", "")
-            category = SERVICES.get(cat_key, {})
-
-            not_found_text = (
+            txt = (
                 f"⚠️ *Token not found on DexScreener*\n\n"
                 f"CA: `{ca}`\n\n"
-                "Don't worry — you can still proceed. We'll verify manually.\n\n"
-                f"Choose your *{category.get('name', 'service')}* tier:"
+                "You can still proceed — our team will verify the token manually.\n\n"
+                f"Choose your *{svc.get('name', 'service')}* package:"
             )
-            markup = types.InlineKeyboardMarkup(row_width=1)
-            for tier_key, tier in category.get("tiers", {}).items():
-                price_str = "Custom" if tier["p"] == 0 else f"${tier['p']:,}"
-                markup.add(types.InlineKeyboardButton(
-                    f"{tier['n']} — {price_str} | {tier['d'][:50]}",
-                    callback_data=f"tier_{cat_key}_{tier_key}"
-                ))
-
+            kb = _tier_keyboard(svc_key, svc, prices)
             user_states[uid] = "choose_tier"
-            bot.send_message(uid, not_found_text, parse_mode="Markdown", reply_markup=markup)
+            bot.send_message(uid, txt, parse_mode="Markdown", reply_markup=kb)
 
-    @bot.message_handler(func=lambda m: user_states.get(m.from_user.id) == "telegram_link")
-    def collect_telegram(m):
-        uid = m.from_user.id
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("tier_"))
+    def cb_tier(c):
+        parts   = c.data.split("_", 2)
+        svc_key = parts[1]
+        tier_key = parts[2]
+        svc  = SERVICES.get(svc_key)
+        tier = svc["tiers"].get(tier_key) if svc else None
+        if not svc or not tier:
+            return bot.answer_callback_query(c.id, "Not found.", show_alert=True)
+
+        uid = c.from_user.id
+        prices = get_crypto_prices()
+        order = active_orders.get(uid, {})
+        order.update({
+            "svc_key":  svc_key,
+            "service":  svc["name"],
+            "tier_key": tier_key,
+            "tier_name": tier["n"],
+            "price":    tier["p"],
+            "desc":     tier["d"],
+        })
+        active_orders[uid] = order
+        user_states[uid] = "await_contact"
+
+        bot.answer_callback_query(c.id)
+
+        txt = (
+            f"✅ *{svc['emoji']} {svc['name']} — {tier['n']}*\n"
+            f"_{tier['d']}_\n\n"
+            f"💰 Price: *${tier['p']:,} USD*\n"
+            f"◎ SOL  `{usd_to_crypto(tier['p'], prices, 'SOL')}`\n"
+            f"⟠ ETH  `{usd_to_crypto(tier['p'], prices, 'ETH')}`\n"
+            f"🟡 BNB  `{usd_to_crypto(tier['p'], prices, 'BNB')}`\n\n"
+            "📩 Enter your *Telegram username* so our team can follow up with you.\n"
+            "_Type_ `skip` _if you prefer not to share._"
+        )
+        bot.send_message(uid, txt, parse_mode="Markdown")
+
+    @bot.message_handler(func=lambda m: user_states.get(m.from_user.id) == "await_contact")
+    def handle_contact(m):
+        uid  = m.from_user.id
         text = m.text.strip()
-        if text in ["🔙 Back", "Back", "Main Menu 🔝", "Main Menu"]:
+        if is_nav(text):
             user_states.pop(uid, None)
             active_orders.pop(uid, None)
             return main_menu(uid)
 
-        if not text.lower().startswith(("https://t.me/", "t.me/", "@")):
-            return bot.send_message(uid, "❌ Please enter a valid Telegram link starting with @ or https://t.me/", reply_markup=nav())
-
+        contact = "" if text.lower() == "skip" else text
         order = active_orders.get(uid, {})
-        if "fields" not in order:
-            order["fields"] = {}
-        order["fields"]["telegram"] = text
+        order["contact"] = contact
+        active_orders[uid] = order
+        user_states[uid] = "choose_currency"
+
+        prices = get_crypto_prices()
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        for cur, w in WALLETS.items():
+            amt = usd_to_crypto(order.get("price", 0), prices, cur)
+            kb.add(types.InlineKeyboardButton(f"{w['sym']} Pay {amt} ({cur})", callback_data=f"pay_{cur}"))
+
+        txt = (
+            f"📋 *Order Summary*\n\n"
+            f"Service:  *{order.get('service')} — {order.get('tier_name', '')}*\n"
+            f"Package:  _{order.get('desc', '')}_\n"
+            f"Price:    *${order.get('price', 0):,} USD*\n"
+        )
+        ca = order.get("fields", {}).get("ca")
+        tk_name = order.get("fields", {}).get("token_name")
+        if ca:
+            txt += f"Token CA: `{ca}`\n"
+        if tk_name:
+            txt += f"Token:    {tk_name}\n"
+        if contact:
+            txt += f"Contact:  {contact}\n"
+        txt += "\nSelect payment currency:"
+        bot.send_message(uid, txt, parse_mode="Markdown", reply_markup=kb)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("pay_") and not c.data.startswith("pay_none"))
+    def cb_pay(c):
+        cur = c.data[4:]
+        if cur not in WALLETS:
+            return bot.answer_callback_query(c.id, "Invalid currency.", show_alert=True)
+        uid = c.from_user.id
+        prices = get_crypto_prices()
+        order  = active_orders.get(uid, {})
+        wallet = WALLETS[cur]
+        amt    = usd_to_crypto(order.get("price", 0), prices, cur)
+
+        order.update({"currency": cur, "crypto_amount": amt, "wallet_addr": wallet["addr"]})
         active_orders[uid] = order
         user_states[uid] = "await_tx"
 
-        pay_kb = types.InlineKeyboardMarkup(row_width=2)
-        for k, v in PAYMENT_METHODS.items():
-            pay_kb.add(types.InlineKeyboardButton(f"Pay with {k}", callback_data=f"choosepm_{k}"))
-
-        price = order.get("price", 0)
-        summary = (
-            f"📋 *Order Summary*\n\n"
-            f"Service: *{order.get('service')}* — {order.get('tier_name', '')}\n"
-            f"Description: {order.get('desc', '')}\n"
-            f"Price: *{'Custom' if price == 0 else f'${price:,}'}*\n\n"
-            f"Token CA: `{order.get('fields', {}).get('ca', 'N/A')}`\n"
-            f"Token: {order.get('fields', {}).get('token_name', 'N/A')} (${order.get('fields', {}).get('token_symbol', '')})\n"
-            f"Chain: {order.get('fields', {}).get('token_chain', 'N/A')}\n"
-            f"Telegram: {text}\n\n"
-            "Select payment method:"
-        )
-        bot.send_message(uid, summary, parse_mode="Markdown", reply_markup=pay_kb)
-
-        try:
-            bot.send_message(ADMIN_ID,
-                f"🆕 *NEW ORDER*\n"
-                f"Service: {order.get('service')} — {order.get('tier_name', '')}\n"
-                f"Price: {'Custom' if price == 0 else f'${price:,}'}\n"
-                f"CA: `{order.get('fields', {}).get('ca', 'N/A')}`\n"
-                f"Token: {order.get('fields', {}).get('token_name', 'N/A')}\n"
-                f"Chain: {order.get('fields', {}).get('token_chain', 'N/A')}\n"
-                f"TG: {text}\n"
-                f"User: {uid} (@{m.from_user.username or 'N/A'})",
-                parse_mode="Markdown")
-        except Exception:
-            pass
-
         notify_discord(
-            f"🆕 NEW ORDER — {order.get('service', '').upper()}",
+            f"🆕 ORDER — {order.get('service', '').upper()}",
             {
-                "Service": f"{order.get('service')} — {order.get('tier_name', '')}",
-                "Price": f"${price:,}" if price > 0 else "Custom",
+                "Service":  f"{order.get('service')} — {order.get('tier_name', '')}",
+                "Price":    f"${order.get('price', 0):,}",
+                "Currency": cur,
+                "Amount":   amt,
                 "Token CA": order.get("fields", {}).get("ca", "N/A"),
-                "Token": order.get("fields", {}).get("token_name", "N/A"),
-                "Chain": order.get("fields", {}).get("token_chain", "N/A"),
-                "Telegram": text,
-                "User": str(uid),
-                "Username": f"@{m.from_user.username or 'N/A'}"
+                "Token":    order.get("fields", {}).get("token_name", "N/A"),
+                "Contact":  order.get("contact") or "N/A",
+                "User":     str(uid),
+                "Username": f"@{c.from_user.username or 'N/A'}",
             },
             color=0xf97316
         )
-
-    @bot.callback_query_handler(func=lambda c: c.data.startswith("choosepm_"))
-    def choose_payment_method(c):
-        uid = c.from_user.id
-        network = c.data.replace("choosepm_", "")
-        pay = PAYMENT_METHODS.get(network, PAYMENT_METHODS["SOL"])
-        order = active_orders.get(uid, {})
-
-        if not order:
-            bot.answer_callback_query(c.id, "Session expired.", show_alert=True)
-            return main_menu(uid)
-
-        price = order.get("price", 0)
-        order["payment_network"] = network
-        active_orders[uid] = order
-        user_states[uid] = "await_tx"
-
-        text = (
-            f"💳 *Payment Instructions*\n\n"
-            f"Service: *{order.get('service')} — {order.get('tier_name', '')}*\n"
-            f"Amount: *{'Custom' if price == 0 else f'${price:,}'}*\n"
-            f"Network: *{pay['name']}*\n\n"
-            f"Send to:\n`{pay['addr']}`\n\n"
-            "After sending:\n"
-            "• Reply with your *transaction hash (TXID)*\n"
-            "• No memo/tag required\n"
-            "• Verification within 10–60 minutes\n\n"
-            "Send TX hash now:"
-        )
-        bot.send_message(uid, text, parse_mode="Markdown", reply_markup=nav())
-        bot.answer_callback_query(c.id)
-
-    @bot.message_handler(func=lambda m: user_states.get(m.from_user.id) == "await_tx")
-    def receive_tx(m):
-        uid = m.from_user.id
-        tx_hash = m.text.strip()
-
-        if text_is_nav(tx_hash):
-            user_states.pop(uid, None)
-            active_orders.pop(uid, None)
-            return main_menu(uid)
-
-        if len(tx_hash) < 20:
-            return bot.send_message(uid, "❌ TX hash looks too short. Please send the full transaction ID.", reply_markup=nav())
-
-        order = active_orders.get(uid, {})
-        order["tx_hash"] = tx_hash
-        active_orders[uid] = order
-
-        notify_discord(
-            "💰 PAYMENT TX RECEIVED",
-            {
-                "Service": f"{order.get('service')} — {order.get('tier_name', '')}",
-                "Price": f"${order.get('price', 0):,}",
-                "Network": order.get("payment_network", "N/A"),
-                "TX Hash": tx_hash,
-                "Token CA": order.get("fields", {}).get("ca", "N/A"),
-                "Token": order.get("fields", {}).get("token_name", "N/A"),
-                "User": str(uid),
-                "Username": f"@{m.from_user.username or 'N/A'}"
-            },
-            color=0x22c55e
-        )
-
         try:
-            bot.send_message(ADMIN_ID,
-                f"💰 *PAYMENT TX*\n"
+            bot.send_message(
+                ADMIN_ID,
+                f"🆕 *NEW ORDER*\n"
                 f"Service: {order.get('service')} — {order.get('tier_name', '')}\n"
-                f"Price: ${order.get('price', 0):,}\n"
-                f"Network: {order.get('payment_network', 'N/A')}\n"
-                f"TX: `{tx_hash}`\n"
+                f"Price: ${order.get('price', 0):,} → {amt}\n"
                 f"CA: `{order.get('fields', {}).get('ca', 'N/A')}`\n"
-                f"User: {uid} (@{m.from_user.username or 'N/A'})",
-                parse_mode="Markdown")
+                f"Token: {order.get('fields', {}).get('token_name', 'N/A')}\n"
+                f"Contact: {order.get('contact') or 'N/A'}\n"
+                f"User: {uid} (@{c.from_user.username or 'N/A'})",
+                parse_mode="Markdown"
+            )
         except Exception:
             pass
 
+        txt = (
+            f"💳 *Payment Instructions*\n\n"
+            f"Service:  *{order.get('service')} — {order.get('tier_name', '')}*\n"
+            f"Amount:   *`{amt}`*\n"
+            f"Network:  *{wallet['name']}*\n\n"
+            f"Send to:\n`{wallet['addr']}`\n\n"
+            "After sending, reply here with your *transaction hash (TXID)*.\n"
+            "_Our team will verify and activate your order within 30–60 minutes._"
+        )
+        bot.send_message(uid, txt, parse_mode="Markdown")
+        bot.answer_callback_query(c.id)
+
+    @bot.message_handler(func=lambda m: user_states.get(m.from_user.id) == "await_tx")
+    def handle_tx(m):
+        uid = m.from_user.id
+        tx  = m.text.strip()
+        if is_nav(tx):
+            user_states.pop(uid, None)
+            active_orders.pop(uid, None)
+            return main_menu(uid)
+        if len(tx) < 20:
+            return bot.send_message(uid, "❌ TX hash too short. Please send the full transaction ID.")
+        order = active_orders.get(uid, {})
+        notify_discord(
+            "💰 PAYMENT TX RECEIVED",
+            {
+                "Service":  f"{order.get('service')} — {order.get('tier_name', '')}",
+                "Price":    f"${order.get('price', 0):,}",
+                "Currency": order.get("currency", "N/A"),
+                "Amount":   order.get("crypto_amount", "N/A"),
+                "TX Hash":  tx,
+                "Token CA": order.get("fields", {}).get("ca", "N/A"),
+                "User":     str(uid),
+                "Username": f"@{m.from_user.username or 'N/A'}",
+            },
+            color=0x22c55e
+        )
+        try:
+            bot.send_message(
+                ADMIN_ID,
+                f"💰 *PAYMENT TX*\n"
+                f"Service: {order.get('service')} — {order.get('tier_name', '')}\n"
+                f"Amount: {order.get('crypto_amount')} ({order.get('currency')})\n"
+                f"TX: `{tx}`\n"
+                f"CA: `{order.get('fields', {}).get('ca', 'N/A')}`\n"
+                f"User: {uid} (@{m.from_user.username or 'N/A'})",
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
         user_states.pop(uid, None)
-        bot.send_message(uid,
-            "✅ *Payment submitted!*\n\nYour transaction is under review. Team will confirm within 30–60 minutes.\n\nThank you for choosing Nomics!",
-            parse_mode="Markdown", reply_markup=nav())
+        bot.send_message(
+            uid,
+            "✅ *Payment submitted!*\n\n"
+            "Your transaction is now under review. Our team will confirm within 30–60 minutes.\n\n"
+            "Thank you for choosing Nomics! 🚀",
+            parse_mode="Markdown"
+        )
 
-
-def text_is_nav(text):
-    return text in ["🔙 Back", "Back", "Main Menu 🔝", "Main Menu"]
+    @bot.message_handler(func=lambda m: True)
+    def fallback(m):
+        if is_nav(m.text.strip()):
+            main_menu(m.chat.id)
+        else:
+            kb = types.InlineKeyboardMarkup()
+            kb.add(types.InlineKeyboardButton("📋 Browse Services", callback_data="menu_services"))
+            kb.add(types.InlineKeyboardButton("💬 Support", callback_data="menu_support"))
+            bot.send_message(m.chat.id, "Use the buttons below to navigate:", reply_markup=kb)
 
 
 def run_polling():

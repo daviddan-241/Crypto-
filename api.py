@@ -303,11 +303,14 @@ def token_lookup():
 
         twitter_url = ""
         telegram_url = ""
+        discord_url = ""
         for s in socials:
             if s.get("type") == "twitter":
                 twitter_url = s.get("url", "")
             elif s.get("type") == "telegram":
                 telegram_url = s.get("url", "")
+            elif s.get("type") == "discord":
+                discord_url = s.get("url", "")
 
         return jsonify({
             "found": True,
@@ -336,6 +339,7 @@ def token_lookup():
             "socials": socials,
             "twitter_url": twitter_url,
             "telegram_url": telegram_url,
+            "discord_url": discord_url,
             "quote_token": quote.get("symbol", ""),
             "description": info.get("description", "")
         })

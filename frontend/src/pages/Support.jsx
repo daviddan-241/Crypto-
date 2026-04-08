@@ -49,7 +49,7 @@ export default function Support() {
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Quick Contact</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <a href="https://t.me/Cariz_bot" target="_blank" rel="noopener noreferrer"
+              <a href="https://t.me/crypto_guy02" target="_blank" rel="noopener noreferrer"
                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#141414', border: '1px solid #1e1e1e', borderRadius: 10, transition: 'border-color .15s' }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = '#2a2a2a'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = '#1e1e1e'}>
@@ -59,7 +59,7 @@ export default function Support() {
                   </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>Telegram Bot</div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>@crypto_guy02</div>
                   <div style={{ fontSize: 11, color: '#666' }}>Fastest response • 24/7</div>
                 </div>
                 <ExternalLink size={13} style={{ color: '#555', marginLeft: 'auto' }} />
@@ -97,9 +97,9 @@ export default function Support() {
               <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
               <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Message Sent!</div>
               <p style={{ color: '#888', fontSize: 14, marginBottom: 20 }}>Our team will get back to you within 24 hours. For faster response, use our Telegram bot.</p>
-              <a href="https://t.me/Cariz_bot" target="_blank" rel="noopener noreferrer"
+              <a href="https://t.me/crypto_guy02" target="_blank" rel="noopener noreferrer"
                 className="btn btn-orange btn-md" style={{ display: 'inline-flex' }}>
-                Open Telegram Bot
+                Message @crypto_guy02
               </a>
             </div>
           ) : (
@@ -123,7 +123,7 @@ export default function Support() {
                 {sending ? 'Sending…' : <><Send size={14} /> Send Message</>}
               </button>
               <p style={{ fontSize: 11, color: '#555', textAlign: 'center' }}>
-                For urgent issues, reach us on <a href="https://t.me/Cariz_bot" target="_blank" style={{ color: '#f97316' }}>Telegram</a>
+                For urgent issues, message <a href="https://t.me/crypto_guy02" target="_blank" style={{ color: '#f97316' }}>@crypto_guy02</a> on Telegram
               </p>
             </form>
           )}

@@ -4,7 +4,7 @@ import { Search, CheckCircle, Zap, ChevronRight, Copy, Check, ArrowLeft, AlertCi
 import { lookupToken, getWallets, getCryptoPrices, submitListing, formatPrice, formatVolume, formatMarketCap, chainLabel, chainClass, toCryptoAmount } from '../utils/api';
 import { useQuery } from '@tanstack/react-query';
 
-const BOT_LINK = 'https://t.me/Cariz_bot';
+const BOT_LINK = 'https://t.me/crypto_guy02';
 const STEPS = ['Contract', 'Project Info', 'Choose Listing'];
 
 function CopyBtn({ text }) {
@@ -98,7 +98,6 @@ export default function SubmitCoin() {
   };
 
   const handleSubmit = async () => {
-    if (!telegram.trim()) { setLookupError('Telegram username is required.'); return; }
     setSubmitting(true);
     try {
       const result = await submitListing({
@@ -293,9 +292,9 @@ export default function SubmitCoin() {
                 <input value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://yourtoken.com" />
               </div>
               <div>
-                <label>Telegram Contact <span style={{ color: '#ef4444' }}>*</span></label>
+                <label>Telegram Contact <span style={{ color: '#555', fontSize: 11, fontWeight: 400 }}>(optional)</span></label>
                 <input value={telegram} onChange={e => setTelegram(e.target.value)} placeholder="@yourtelegram" />
-                <div style={{ fontSize: 11, color: '#555', marginTop: 4 }}>Required — our team will contact you here.</div>
+                <div style={{ fontSize: 11, color: '#555', marginTop: 4 }}>Optional — enter if you'd like our team to contact you.</div>
               </div>
               <div>
                 <label>Twitter / X (optional)</label>
@@ -304,7 +303,7 @@ export default function SubmitCoin() {
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
               <button className="btn btn-ghost btn-md" onClick={() => setStep(0)}><ArrowLeft size={14} /> Back</button>
-              <button className="btn btn-orange btn-md" style={{ flex: 1 }} onClick={() => { if (!telegram.trim()) { setLookupError('Please enter your Telegram username.'); return; } setLookupError(''); setStep(2); }}>
+              <button className="btn btn-orange btn-md" style={{ flex: 1 }} onClick={() => { setLookupError(''); setStep(2); }}>
                 Next: Choose Listing <ChevronRight size={14} />
               </button>
             </div>
