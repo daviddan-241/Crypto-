@@ -16,10 +16,6 @@ def home():
 def health():
     return {"status": "ok"}, 200
 
-threading.Thread(
-    target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), debug=False, use_reloader=False),
-    daemon=True
-).start()
 
 TOKEN    = os.environ.get("BOT_TOKEN", "8710292892:AAG1OQvohkgou5saMxLWg1eeozXX9Wp5uLY")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "8235324142"))
