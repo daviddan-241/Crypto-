@@ -18,7 +18,7 @@ DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
 SITE_URL = os.environ.get("SITE_URL", "https://nomics.replit.app")
 ALPHA_GROUP = "https://t.me/+QJVQUQIhP-82ZDk8"
 
-BNB_WALLET = os.environ.get("BNB_WALLET", "0x479F8bdD340bD7276D6c7c9B3fFF86EF2315f857A")
+BNB_WALLET = os.environ.get("BNB_WALLET", "bnb189gjjucwltdpnlemrveakf0q6xg0smfqdh6869")
 ETH_WALLET = os.environ.get("ETH_WALLET", "0x479F8bdD340bD7276D6c7c9B3fFF86EF2315f857A")
 SOL_WALLET = os.environ.get("SOL_WALLET", "46ZKRuURaASKEcKBafnPZgMaTqBL8RK8TssZgZzFCBzn")
 
