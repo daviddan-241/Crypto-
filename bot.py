@@ -17,7 +17,7 @@ def health():
     return {"status": "ok"}, 200
 
 threading.Thread(
-    target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False, use_reloader=False),
+    target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)), debug=False, use_reloader=False),
     daemon=True
 ).start()
 
