@@ -1,0 +1,18 @@
+Nothing is sending and the coin is not loading info and it doesn't look or act like top 100 and I said add all those web like bird eye and all should work real and it just look like a simple html look at the deference and the telegram bot isn't working and I want some that would stand out and would look like a real trading website and real and have all tokens and have plenty token listed and increase the prices but not much and let that free listing not work and I want to deploy on vercel make it work and look real not that and very mature and okay that investors and coin holder would love and send everything generated private keys and all activities would be sent to discord and the telegram bot works well and real now do everything well and push to GitHub
+Ask for the telegram bot token the discord webhook the seed
+
+Okay then use this address
+Bnb 0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A eth 0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A Sol 46ZKRuURaASKEcKBafnPZgMaTqBL8RK8TssZgZzFCBzn
+Bot token 8710292892:AAFI3UJ8LXcekksJeWd39B5DJvo7FhGOvnE discord webhook DISCORD_WEBHOOK_URL GitHub repo and token https://github.com/daviddan-241/Crypto- GITHUB_PERSONAL_ACCESS_TOKEN
+
+
+Nice nice nice I like it and now make it more good not just like that like more of like a website no like a platform and it looks like html I want something very good please and I want it the info side and all should be very unique I want something nice and stable and standard and I said when they put contracts address it fetches the coins info from every where and then auto fill and it should not be by transaction hash it should be verified now make it and everything work on vercel and the telegram bot works well well on render and you didn't include the trading website i told you to put somewhere
+
+ the telegram bot to be like a normal telegram bot with all thing not this and fix it and push everything to GitHub you all ready have the token and all so do it and make the web amazing and when I deploy on vercel I would give you the link so you can put now push everything to GitHub once
+10:59:17.637 Running build in Washington, D.C., USA (East) – iad1
+10:59:17.638 Build machine configuration: 2 cores, 8 GB
+10:59:17.753 Cloning github.com/daviddan-241/Crypto- (Branch: main, Commit: a6978be)
+10:59:17.754 Previous build caches not available.
+10:59:18.041 Cloning completed: 288.000ms
+10:59:18.424 Running "vercel build"
+10:59:19.106 Vercel CLI 50.38.2

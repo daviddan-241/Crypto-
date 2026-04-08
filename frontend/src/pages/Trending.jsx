@@ -1,223 +1,193 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, Link } from 'react-router-dom';
-import { Flame, TrendingUp, Zap, Star, ChevronUp, ChevronDown, ArrowUpRight, Rocket } from 'lucide-react';
-import { getTrending, getCoins, formatMarketCap, formatPrice, formatPercent } from '../utils/api';
+import { useNavigate } from 'react-router-dom';
+import { Flame, TrendingUp, ChevronUp, ChevronDown, Zap } from 'lucide-react';
+import { getTrending, getGainers, formatPrice, formatMarketCap, formatVolume, formatPercent } from '../utils/api';
 
-const pctColor = (v) => v == null ? 'text-gray-500' : v >= 0 ? 'text-emerald-400' : 'text-red-400';
+const PctCell = ({ val }) => {
+  if (val == null) return <span style={{ color: '#555' }}>—</span>;
+  const pos = parseFloat(val) >= 0;
+  return (
+    <span style={{ color: pos ? '#22c55e' : '#ef4444', fontSize: 12, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'flex-end' }}>
+      {pos ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+      {Math.abs(parseFloat(val)).toFixed(2)}%
+    </span>
+  );
+};
+
+function CoinGrid({ coins, label, icon, navigate }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        {icon}
+        <span style={{ fontSize: 15, fontWeight: 700 }}>{label}</span>
+      </div>
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {coins.slice(0, 10).map((coin, i) => {
+          const price = coin.current_price || parseFloat(coin.data?.price || 0);
+          const chg24h = coin.price_change_percentage_24h ?? parseFloat(coin.data?.price_change_percentage_24h?.usd ?? 0);
+          const cap = coin.market_cap || 0;
+          return (
+            <div key={coin.id || coin.name} className="token-row"
+              style={{ gridTemplateColumns: '32px 2fr 1fr 1fr 1fr', gap: 8, cursor: 'pointer' }}
+              onClick={() => navigate(`/coin/${coin.id}`)}>
+              <div style={{ fontSize: 12, color: '#555', fontWeight: 700 }}>{i + 1}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <img src={coin.image || coin.thumb || coin.large} alt={coin.name}
+                  style={{ width: 28, height: 28, borderRadius: '50%', background: '#1a1a1a', flexShrink: 0 }}
+                  onError={e => e.target.style.display = 'none'} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{coin.name}</div>
+                  <div style={{ fontSize: 10, color: '#555', textTransform: 'uppercase' }}>{coin.symbol}</div>
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: 12, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>{formatPrice(price)}</div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}><PctCell val={chg24h} /></div>
+              <div style={{ textAlign: 'right', fontSize: 11, color: '#666', fontFamily: 'JetBrains Mono, monospace' }}>{formatMarketCap(cap)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function Trending() {
   const navigate = useNavigate();
 
-  const { data: trendingData, isLoading: tLoading } = useQuery({
-    queryKey: ['trending'], queryFn: getTrending, staleTime: 120000,
-  });
-  const { data: coins = [], isLoading: cLoading } = useQuery({
-    queryKey: ['coins'], queryFn: () => getCoins({ per_page: 250 }), staleTime: 60000,
-  });
+  const { data: trendingData, isLoading: tLoading } = useQuery({ queryKey: ['trending'], queryFn: getTrending, staleTime: 120000 });
+  const { data: gainersData, isLoading: gLoading } = useQuery({ queryKey: ['gainers'], queryFn: getGainers, staleTime: 60000 });
 
-  const trendingCoins = trendingData?.coins || [];
-  const trendingNFTs = trendingData?.nfts || [];
-  const trendingCategories = trendingData?.categories || [];
-  const safeCoins = Array.isArray(coins) ? coins : [];
-
-  const enriched = trendingCoins.map(item => {
-    const tc = item.item || item;
-    const coin = safeCoins.find(c => c.id === tc.id) || {};
-    return { ...tc, live: coin };
-  });
-
-  const hotCoins = [...safeCoins].sort((a, b) => (b.total_volume || 0) - (a.total_volume || 0)).slice(0, 10);
-  const gainers = [...safeCoins].filter(c => c.price_change_percentage_24h > 0)
-    .sort((a, b) => b.price_change_percentage_24h - a.price_change_percentage_24h).slice(0, 10);
-  const losers = [...safeCoins].filter(c => c.price_change_percentage_24h < 0)
-    .sort((a, b) => a.price_change_percentage_24h - b.price_change_percentage_24h).slice(0, 10);
-  const newListings = [...safeCoins].filter(c => c.market_cap_rank > 200)
-    .sort((a, b) => b.price_change_percentage_24h - a.price_change_percentage_24h).slice(0, 10);
-
-  const CoinRow = ({ coin, rank }) => {
-    const p24h = coin.price_change_percentage_24h;
-    return (
-      <tr onClick={() => navigate(`/coin/${coin.id}`)} className="hover:bg-[#1a1d2e]/60 cursor-pointer transition-colors">
-        <td className="px-4 py-2.5 text-gray-500 text-xs font-mono">{rank}</td>
-        <td className="px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <img src={coin.image} alt={coin.name} className="w-6 h-6 rounded-full flex-shrink-0" />
-            <span className="text-white text-xs font-semibold">{coin.name}</span>
-            <span className="text-gray-500 text-[10px] uppercase">{coin.symbol}</span>
-          </div>
-        </td>
-        <td className="px-4 py-2.5 text-right font-mono text-white text-xs">{formatPrice(coin.current_price)}</td>
-        <td className={`px-4 py-2.5 text-right font-mono text-xs ${pctColor(p24h)}`}>
-          {p24h != null ? <span className="flex items-center justify-end gap-0.5">
-            {p24h >= 0 ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
-            {Math.abs(p24h).toFixed(2)}%
-          </span> : '–'}
-        </td>
-        <td className="px-4 py-2.5 text-right font-mono text-gray-300 text-xs">{formatMarketCap(coin.market_cap)}</td>
-      </tr>
-    );
-  };
-
-  const SectionTable = ({ title, icon, coins: list, emptyMsg }) => (
-    <div className="bg-[#111827] border border-[#2d3748] rounded-xl overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#2d3748] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {icon}
-          <span className="text-sm font-semibold text-white">{title}</span>
-        </div>
-        <Link to="/" className="text-xs text-[#7c3aed] hover:text-[#a78bfa] flex items-center gap-0.5 transition-colors">
-          View All <ArrowUpRight size={11} />
-        </Link>
-      </div>
-      <table className="w-full text-left">
-        <thead>
-          <tr className="text-[10px] uppercase text-gray-500 tracking-wider bg-[#0d0e14]/60">
-            <th className="px-4 py-2 font-medium w-10">#</th>
-            <th className="px-4 py-2 font-medium">Token</th>
-            <th className="px-4 py-2 text-right font-medium">Price</th>
-            <th className="px-4 py-2 text-right font-medium">24h</th>
-            <th className="px-4 py-2 text-right font-medium">Market Cap</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[#1a1d2e]">
-          {cLoading ? (
-            Array(6).fill(0).map((_, i) => (
-              <tr key={i} className="h-[42px] animate-pulse">
-                {Array(5).fill(0).map((_, j) => <td key={j} className="px-4 py-2"><div className="h-3 bg-[#2d3748] rounded"></div></td>)}
-              </tr>
-            ))
-          ) : list.length === 0 ? (
-            <tr><td colSpan="5" className="px-4 py-6 text-center text-gray-500 text-xs">{emptyMsg}</td></tr>
-          ) : list.map((coin, i) => <CoinRow key={coin.id} coin={coin} rank={i + 1} />)}
-        </tbody>
-      </table>
-    </div>
-  );
+  const trending = trendingData?.coins || [];
+  const gainers = gainersData?.gainers || [];
+  const losers = gainersData?.losers || [];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Flame className="text-orange-400" size={22} />
-            Trending & Market Movers
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">Real-time trending tokens, top gainers, losers, and new listings</p>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <Flame size={22} style={{ color: '#f97316' }} />
+          <h1 style={{ fontSize: 26, fontWeight: 900 }}>Market Movers</h1>
         </div>
-        <Link to="/promote"
-          className="flex items-center gap-2 bg-gradient-to-r from-[#7c3aed] to-[#6d28d9] hover:from-[#8b5cf6] hover:to-[#7c3aed] text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-all shadow-lg shadow-[#7c3aed]/20">
-          <Rocket size={14} />
-          Boost Your Token
-        </Link>
+        <p style={{ fontSize: 13, color: '#666' }}>Live trending coins, top gainers and losers from across the market.</p>
       </div>
 
-      {/* Trending Coins Feature Cards */}
+      {/* Trending */}
       <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Flame size={14} className="text-orange-400" />
-          <span className="text-sm font-semibold text-white">🔥 Trending on CoinGecko</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <Flame size={16} style={{ color: '#f97316' }} />
+          <span style={{ fontSize: 15, fontWeight: 700 }}>🔥 Trending on CoinGecko</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {tLoading ? (
-            Array(10).fill(0).map((_, i) => (
-              <div key={i} className="h-[96px] bg-[#111827] border border-[#2d3748] rounded-xl animate-pulse" />
-            ))
-          ) : enriched.slice(0, 10).map((tc, idx) => {
-            const chg = tc.live?.price_change_percentage_24h ?? tc.data?.price_change_percentage_24h?.usd;
-            const price = tc.live?.current_price ?? tc.data?.price;
-            const isPos = chg >= 0;
-            return (
-              <div key={tc.id} onClick={() => navigate(`/coin/${tc.id}`)}
-                className="bg-[#111827] border border-[#2d3748] hover:border-[#7c3aed]/40 rounded-xl p-3 cursor-pointer transition-all group hover:shadow-lg hover:shadow-[#7c3aed]/10">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <img src={tc.thumb || tc.live?.image} alt={tc.name} className="w-7 h-7 rounded-full" onError={e => e.target.style.display = 'none'} />
+        {tLoading ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+            {Array(7).fill(0).map((_, i) => <div key={i} className="shimmer" style={{ height: 100, borderRadius: 10 }} />)}
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+            {trending.map((coin, i) => {
+              const pct = parseFloat(coin.data?.price_change_percentage_24h?.usd ?? 0);
+              const pos = pct >= 0;
+              return (
+                <div key={coin.id}
+                  style={{ background: '#111', border: '1px solid #1e1e1e', borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color .15s', position: 'relative' }}
+                  onClick={() => navigate(`/coin/${coin.id}`)}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = '#2a2a2a'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = '#1e1e1e'}>
+                  <div style={{ position: 'absolute', top: 10, right: 10, fontSize: 10, fontWeight: 700, color: '#555' }}>#{i + 1}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <img src={coin.thumb || coin.large} alt={coin.name}
+                      style={{ width: 30, height: 30, borderRadius: '50%', background: '#1a1a1a' }}
+                      onError={e => e.target.style.display = 'none'} />
                     <div>
-                      <div className="text-white text-xs font-semibold leading-tight">{tc.symbol?.toUpperCase()}</div>
-                      <div className="text-gray-500 text-[9px]">#{tc.market_cap_rank || '?'}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{coin.symbol?.toUpperCase()}</div>
+                      <div style={{ fontSize: 10, color: '#555' }}>#{coin.market_cap_rank || '—'}</div>
                     </div>
                   </div>
-                  <span className="text-[10px] text-gray-500 bg-[#1a1d2e] rounded px-1.5 py-0.5 font-mono">#{idx + 1}</span>
-                </div>
-                <div className="flex items-end justify-between">
-                  <span className="font-mono text-[11px] text-gray-200">{price ? formatPrice(price) : '–'}</span>
-                  <span className={`font-mono text-[10px] font-medium flex items-center gap-0.5 ${isPos ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {isPos ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
-                    {chg != null ? `${Math.abs(chg).toFixed(2)}%` : '–'}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4-Grid of Market Movers */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <SectionTable title="🔥 Hot by Volume" icon={<Zap size={14} className="text-yellow-400" />} coins={hotCoins} emptyMsg="Loading..." />
-        <SectionTable title="📈 Top Gainers (24h)" icon={<TrendingUp size={14} className="text-emerald-400" />} coins={gainers} emptyMsg="No gainers right now" />
-        <SectionTable title="📉 Top Losers (24h)" icon={<TrendingUp size={14} className="text-red-400 rotate-180" />} coins={losers} emptyMsg="No losers data" />
-        <SectionTable title="⭐ New Listings" icon={<Star size={14} className="text-blue-400" />} coins={newListings} emptyMsg="No new listings" />
-      </div>
-
-      {/* Trending NFTs if available */}
-      {trendingNFTs.length > 0 && (
-        <div className="bg-[#111827] border border-[#2d3748] rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Star size={14} className="text-purple-400" />
-            <span className="text-sm font-semibold text-white">Trending NFTs</span>
-          </div>
-          <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
-            {trendingNFTs.slice(0, 8).map(nft => (
-              <div key={nft.id} className="flex-shrink-0 w-[140px] bg-[#0d0e14] border border-[#2d3748] rounded-lg p-2.5">
-                <img src={nft.thumb} alt={nft.name} className="w-8 h-8 rounded mb-1.5" onError={e => e.target.style.display = 'none'} />
-                <div className="text-white text-[11px] font-semibold truncate">{nft.name}</div>
-                <div className="text-gray-500 text-[10px]">{nft.symbol}</div>
-                {nft.data?.floor_price && <div className="text-gray-300 font-mono text-[10px] mt-0.5">{nft.data.floor_price}</div>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Trending Categories */}
-      {trendingCategories.length > 0 && (
-        <div className="bg-[#111827] border border-[#2d3748] rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Flame size={14} className="text-orange-400" />
-            <span className="text-sm font-semibold text-white">Trending Categories</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {trendingCategories.slice(0, 12).map(cat => {
-              const chg = cat.data?.market_cap_change_percentage_24h?.usd;
-              const isPos = chg >= 0;
-              return (
-                <div key={cat.id} className="flex items-center gap-2 bg-[#0d0e14] border border-[#2d3748] rounded-lg px-3 py-2">
-                  <span className="text-white text-xs font-medium">{cat.name}</span>
-                  {chg != null && (
-                    <span className={`font-mono text-[10px] ${isPos ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {isPos ? '+' : ''}{chg.toFixed(2)}%
-                    </span>
+                  <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', marginBottom: 4 }}>
+                    {coin.data?.price ? formatPrice(parseFloat(coin.data.price)) : '—'}
+                  </div>
+                  <div style={{ fontSize: 11, color: pos ? '#22c55e' : '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2 }}>
+                    {pos ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                    {Math.abs(pct).toFixed(2)}%
+                  </div>
+                  {coin.data?.market_cap && (
+                    <div style={{ fontSize: 10, color: '#555', marginTop: 4 }}>{coin.data.market_cap}</div>
                   )}
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* CTA */}
-      <div className="bg-gradient-to-r from-[#7c3aed]/20 to-[#6d28d9]/10 border border-[#7c3aed]/30 rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div>
-          <h3 className="text-white font-bold text-lg">Want your token on this page?</h3>
-          <p className="text-gray-400 text-sm mt-1">Boost your project's visibility with our Web3 marketing services</p>
-        </div>
-        <Link to="/promote"
-          className="flex-shrink-0 flex items-center gap-2 bg-[#7c3aed] hover:bg-[#8b5cf6] text-white font-semibold px-6 py-3 rounded-lg transition-colors">
-          <Rocket size={15} />
-          Promote Your Token
-        </Link>
+      {/* Top Gainers & Losers side by side */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        {gLoading ? (
+          <>
+            <div className="shimmer" style={{ height: 400, borderRadius: 12 }} />
+            <div className="shimmer" style={{ height: 400, borderRadius: 12 }} />
+          </>
+        ) : (
+          <>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <TrendingUp size={16} style={{ color: '#22c55e' }} />
+                <span style={{ fontSize: 15, fontWeight: 700 }}>Top Gainers (24H)</span>
+              </div>
+              <div className="card" style={{ overflow: 'hidden' }}>
+                {gainers.slice(0, 10).map((coin, i) => (
+                  <div key={coin.id} className="token-row"
+                    style={{ gridTemplateColumns: '28px 2fr 1fr 1fr', gap: 8 }}
+                    onClick={() => navigate(`/coin/${coin.id}`)}>
+                    <div style={{ fontSize: 11, color: '#555', fontWeight: 700 }}>{i + 1}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <img src={coin.image} alt={coin.name} style={{ width: 26, height: 26, borderRadius: '50%' }} onError={e => e.target.style.display = 'none'} />
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>{coin.symbol?.toUpperCase()}</div>
+                        <div style={{ fontSize: 10, color: '#555' }}>{coin.name}</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>{formatPrice(coin.current_price)}</div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#22c55e', fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <ChevronUp size={10} />+{(coin.price_change_percentage_24h || 0).toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <ChevronDown size={16} style={{ color: '#ef4444' }} />
+                <span style={{ fontSize: 15, fontWeight: 700 }}>Top Losers (24H)</span>
+              </div>
+              <div className="card" style={{ overflow: 'hidden' }}>
+                {losers.slice(0, 10).map((coin, i) => (
+                  <div key={coin.id} className="token-row"
+                    style={{ gridTemplateColumns: '28px 2fr 1fr 1fr', gap: 8 }}
+                    onClick={() => navigate(`/coin/${coin.id}`)}>
+                    <div style={{ fontSize: 11, color: '#555', fontWeight: 700 }}>{i + 1}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <img src={coin.image} alt={coin.name} style={{ width: 26, height: 26, borderRadius: '50%' }} onError={e => e.target.style.display = 'none'} />
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700 }}>{coin.symbol?.toUpperCase()}</div>
+                        <div style={{ fontSize: 10, color: '#555' }}>{coin.name}</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>{formatPrice(coin.current_price)}</div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <ChevronDown size={10} />{(coin.price_change_percentage_24h || 0).toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

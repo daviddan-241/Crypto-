@@ -1,67 +1,141 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink, MessageCircle } from 'lucide-react';
-import { getCoinDetail, formatPrice, formatMarketCap, formatPercent } from '../utils/api';
+import { ArrowLeft, Globe, ExternalLink,  MessageCircle, ChevronUp, ChevronDown } from 'lucide-react';
+import { getCoinDetail, formatPrice, formatMarketCap, formatVolume, formatPercent } from '../utils/api';
+
+const StatRow = ({ label, value, valueClass }) => (
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1a1a1a' }}>
+    <span style={{ fontSize: 12, color: '#666' }}>{label}</span>
+    <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', color: valueClass === 'green' ? '#22c55e' : valueClass === 'red' ? '#ef4444' : '#e0e0e0' }}>{value}</span>
+  </div>
+);
+
+const PctBadge = ({ val, label }) => {
+  if (val == null) return null;
+  const pos = val >= 0;
+  return (
+    <div style={{ background: '#141414', border: '1px solid #1e1e1e', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+      <div style={{ fontSize: 10, color: '#555', fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: pos ? '#22c55e' : '#ef4444', fontFamily: 'JetBrains Mono, monospace', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+        {pos ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+        {Math.abs(val).toFixed(2)}%
+      </div>
+    </div>
+  );
+};
 
 export default function CoinDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data: coin, isLoading, isError } = useQuery({ queryKey: ['coin', id], queryFn: () => getCoinDetail(id) });
+  const [tab, setTab] = useState('overview');
 
-  if (isLoading) return <div className="p-8 text-center text-gray-400 animate-pulse">Loading {id}...</div>;
-  if (isError || !coin) return <div className="p-8 text-center text-red-400">Error loading coin details.</div>;
+  const { data: coin, isLoading, isError } = useQuery({
+    queryKey: ['coin', id], queryFn: () => getCoinDetail(id), staleTime: 60000
+  });
 
-  const isPositive24h = coin.market_data?.price_change_24h_pct >= 0;
+  if (isLoading) return (
+    <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="shimmer" style={{ width: 100, height: 36, borderRadius: 8 }} />
+      <div className="shimmer" style={{ height: 120, borderRadius: 12 }} />
+      <div className="shimmer" style={{ height: 300, borderRadius: 12 }} />
+    </div>
+  );
+
+  if (isError || !coin) return (
+    <div style={{ textAlign: 'center', padding: 60, maxWidth: 500, margin: '0 auto' }}>
+      <div style={{ fontSize: 40, marginBottom: 16 }}>😕</div>
+      <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Coin not found</div>
+      <p style={{ color: '#666', fontSize: 14, marginBottom: 20 }}>Unable to load data for "{id}"</p>
+      <button className="btn btn-ghost btn-md" onClick={() => navigate(-1)}><ArrowLeft size={14} /> Go Back</button>
+    </div>
+  );
+
+  const md = coin.market_data || {};
+  const links = coin.links || {};
+  const chg24 = md.price_change_24h_pct;
+  const chg1h = md.price_change_1h_pct;
+  const chg7d = md.price_change_7d_pct;
 
   return (
-    <div className="max-w-5xl mx-auto flex flex-col gap-8">
-      <button onClick={() => navigate(-1)} className="self-start flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm font-medium">
-        <ArrowLeft size={16} /> Back to Markets
+    <div style={{ maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start' }} onClick={() => navigate(-1)}>
+        <ArrowLeft size={14} /> Back
       </button>
 
-      <div className="bg-[#1a1d2e] border border-[#2d3748] rounded-xl p-6 md:p-8 flex flex-col md:flex-row gap-8 items-start">
-        <div className="flex gap-6 items-center w-full md:w-auto">
-          <img src={coin.image?.large || coin.image} alt={coin.name} className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-[#0d0e14] p-1 border border-[#2d3748]" />
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className="text-3xl font-bold text-white">{coin.name}</h1>
-              <span className="bg-[#2d3748] text-gray-300 text-xs px-2 py-1 rounded font-mono uppercase">{coin.symbol}</span>
+      {/* Header */}
+      <div className="card" style={{ padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            {coin.image && <img src={coin.image} alt={coin.name} style={{ width: 56, height: 56, borderRadius: '50%' }} onError={e => e.target.style.display = 'none'} />}
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 900 }}>{coin.name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                <span style={{ fontSize: 13, color: '#666', textTransform: 'uppercase', fontWeight: 700 }}>{coin.symbol}</span>
+                {links.homepage && (
+                  <a href={links.homepage} target="_blank" rel="noopener noreferrer">
+                    <Globe size={13} style={{ color: '#555' }} />
+                  </a>
+                )}
+                {links.twitter && (
+                  <a href={`https://twitter.com/${links.twitter}`} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink size={13} style={{ color: "#555" }} />
+                  </a>
+                )}
+                {links.telegram && (
+                  <a href={`https://t.me/${links.telegram}`} target="_blank" rel="noopener noreferrer">
+                    <MessageCircle size={13} style={{ color: '#555' }} />
+                  </a>
+                )}
+              </div>
             </div>
-            <div className="flex gap-4 mt-4">
-              {coin.links?.homepage?.[0] && <a href={coin.links.homepage[0]} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-[#7c3aed] transition-colors"><ExternalLink size={20} /></a>}
-              {coin.links?.twitter_screen_name && <a href={`https://twitter.com/${coin.links.twitter_screen_name}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-[#7c3aed] transition-colors"><ExternalLink size={20} /></a>}
-              {coin.links?.telegram_channel_identifier && <a href={`https://t.me/${coin.links.telegram_channel_identifier}`} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-[#7c3aed] transition-colors"><MessageCircle size={20} /></a>}
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 30, fontWeight: 900, fontFamily: 'JetBrains Mono, monospace' }}>
+              {formatPrice(md.current_price)}
+            </div>
+            <div style={{ color: chg24 >= 0 ? '#22c55e' : '#ef4444', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'flex-end', marginTop: 4 }}>
+              {chg24 >= 0 ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {Math.abs(chg24 || 0).toFixed(2)}% (24h)
             </div>
           </div>
         </div>
 
-        <div className="flex-1 w-full grid grid-cols-2 sm:grid-cols-4 gap-6 md:border-l border-[#2d3748] md:pl-8">
-          <div className="flex flex-col">
-            <span className="text-sm text-gray-400 mb-1">Price</span>
-            <span className="text-2xl font-mono font-semibold text-white">{formatPrice(coin.market_data?.current_price?.usd || coin.market_data?.current_price)}</span>
-            <span className={`text-sm font-mono mt-1 ${isPositive24h ? 'text-[#10b981]' : 'text-[#ef4444]'}`}>{formatPercent(coin.market_data?.price_change_24h_pct)} (24h)</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm text-gray-400 mb-1">Market Cap</span>
-            <span className="text-lg font-mono text-white">{formatMarketCap(coin.market_data?.market_cap?.usd || coin.market_data?.market_cap)}</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm text-gray-400 mb-1">Volume (24h)</span>
-            <span className="text-lg font-mono text-white">{formatMarketCap(coin.market_data?.total_volume?.usd || coin.market_data?.total_volume)}</span>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-sm text-gray-400 mb-1">ATH</span>
-            <span className="text-lg font-mono text-white">{formatPrice(coin.market_data?.ath?.usd || coin.market_data?.ath)}</span>
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 20 }}>
+          <PctBadge val={chg1h} label="1H" />
+          <PctBadge val={chg24} label="24H" />
+          <PctBadge val={chg7d} label="7D" />
         </div>
       </div>
 
-      {coin.description?.en && (
-        <div className="bg-[#111827] border border-[#2d3748] rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">About {coin.name}</h2>
-          <div className="text-gray-400 text-sm leading-relaxed prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: coin.description.en }} />
+      {/* Tabs */}
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div className="tabs" style={{ padding: '0 8px' }}>
+          {[['overview', '📊 Overview'], ['info', 'ℹ️ Info']].map(([t, l]) => (
+            <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{l}</button>
+          ))}
         </div>
-      )}
+
+        <div style={{ padding: 20 }}>
+          {tab === 'overview' && (
+            <div>
+              <StatRow label="Market Cap" value={formatMarketCap(md.market_cap)} />
+              <StatRow label="24H Volume" value={formatVolume(md.total_volume)} />
+              <StatRow label="Circulating Supply" value={md.circulating_supply ? `${md.circulating_supply?.toLocaleString()} ${coin.symbol?.toUpperCase()}` : '—'} />
+              <StatRow label="Total Supply" value={md.total_supply ? `${md.total_supply?.toLocaleString()} ${coin.symbol?.toUpperCase()}` : '—'} />
+              <StatRow label="All Time High" value={formatPrice(md.ath)} />
+              <StatRow label="Fully Diluted Val." value={formatMarketCap(md.fully_diluted_valuation)} />
+            </div>
+          )}
+
+          {tab === 'info' && coin.description && (
+            <div>
+              <div style={{ fontSize: 14, color: '#999', lineHeight: 1.7, maxHeight: 300, overflow: 'auto' }}
+                dangerouslySetInnerHTML={{ __html: coin.description.replace(/<a /g, '<a style="color:#f97316" ') }} />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

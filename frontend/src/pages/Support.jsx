@@ -1,171 +1,133 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, User, Mail, Shield, Bot, ExternalLink } from 'lucide-react';
+import { Send, MessageCircle, Mail, User, ExternalLink, Bot } from 'lucide-react';
 import { sendSupport } from '../utils/api';
 
+const FAQS = [
+  { q: 'How do I get my token listed?', a: 'Go to the "Get Listed" page and enter your contract address. We support Ethereum, BSC, Solana, Base, and more. Premium listing is instant!' },
+  { q: 'How long does review take for free listing?', a: 'Free listing requests are reviewed manually and can take 7-14 business days. For instant listing, choose our Premium plan.' },
+  { q: 'What payment methods do you accept?', a: 'We accept BNB, ETH, and SOL. Prices are: 0.05 BNB | 0.02 ETH | 0.2 SOL for Premium Listing.' },
+  { q: 'How does boosting work?', a: 'Boost points increase your token\'s ranking in the Listed section. Each boost adds 150 points. You can boost multiple times!' },
+  { q: 'Do you offer refunds?', a: 'All sales are final. Make sure to verify the contract address before submitting. Contact us if you have any payment issues.' },
+];
+
 export default function Support() {
-  const [sessionStarted, setSessionStarted] = useState(false);
-  const [userInfo, setUserInfo] = useState({ name: '', email: '' });
-  const [messages, setMessages] = useState([
-    { id: 1, sender: 'bot', text: 'Welcome to Nomics Support. How can we help you today?', time: new Date() }
-  ]);
-  const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef(null);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [openFaq, setOpenFaq] = useState(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isTyping]);
-
-  const startSession = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
-    if (userInfo.name && userInfo.email) {
-      setSessionStarted(true);
-    }
-  };
-
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-
-    const userMsg = { id: Date.now(), sender: 'user', text: input, time: new Date() };
-    setMessages(prev => [...prev, userMsg]);
-    setInput('');
-    setIsTyping(true);
-
+    if (!name.trim() || !message.trim()) return;
+    setSending(true);
     try {
-      await sendSupport({
-        name: userInfo.name,
-        email: userInfo.email,
-        session_id: 'local_session',
-        message: userMsg.text
-      });
-      
-      // Simulate bot typing delay
-      setTimeout(() => {
-        setIsTyping(false);
-        setMessages(prev => [...prev, {
-          id: Date.now() + 1,
-          sender: 'bot',
-          text: 'We have received your message. A support agent will review it and get back to you shortly.',
-          time: new Date()
-        }]);
-      }, 1000);
-    } catch (err) {
-      setIsTyping(false);
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        sender: 'system',
-        text: 'Failed to send message. Please try again.',
-        time: new Date()
-      }]);
+      await sendSupport({ name, email, message, session_id: `web_${Date.now()}` });
+      setSent(true);
+    } catch (e) {
+      alert('Failed to send. Please try Telegram instead.');
     }
-  };
-
-  const formatTime = (date) => {
-    return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setSending(false);
   };
 
   return (
-    <div className="max-w-4xl mx-auto flex flex-col md:flex-row gap-8 py-4 h-[calc(100vh-140px)]">
-      {/* Sidebar Info */}
-      <div className="md:w-1/3 flex flex-col gap-6">
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Live Support</h1>
-          <p className="text-gray-400 text-sm">Get help with promotions, API access, or account issues.</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 900, margin: '0 auto' }}>
+      {/* Header */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <MessageCircle size={22} style={{ color: '#f97316' }} />
+          <h1 style={{ fontSize: 26, fontWeight: 900 }}>Support</h1>
         </div>
-
-        <div className="bg-[#1a1d2e] border border-[#2d3748] rounded-xl p-5 flex flex-col gap-4">
-          <div className="flex items-start gap-3 text-sm">
-            <Shield className="w-5 h-5 text-[#7c3aed] shrink-0" />
-            <div className="text-gray-300">Support is available 24/7. We typically reply within 10 minutes.</div>
-          </div>
-          <div className="h-px bg-[#2d3748] w-full my-1"></div>
-          <a href="https://t.me/Cariz_bot" target="_blank" rel="noopener noreferrer" className="flex items-center justify-between group hover:bg-[#2d3748] p-3 rounded-lg transition-colors -mx-3 text-sm">
-            <div className="flex items-center gap-3 text-gray-300 group-hover:text-white">
-              <ExternalLink className="w-5 h-5 text-[#10b981]" />
-              <span>Chat on Telegram</span>
-            </div>
-            <span className="text-xs text-gray-500">Fastest</span>
-          </a>
-        </div>
+        <p style={{ fontSize: 13, color: '#666' }}>Get help with listings, payments, and platform questions.</p>
       </div>
 
-      {/* Chat Window */}
-      <div className="md:w-2/3 flex flex-col bg-[#1a1d2e] border border-[#2d3748] rounded-2xl overflow-hidden h-full shadow-2xl">
-        <div className="p-4 bg-[#111827] border-b border-[#2d3748] flex items-center gap-3">
-          <div className="w-10 h-10 bg-[#7c3aed]/20 rounded-full flex items-center justify-center border border-[#7c3aed]/50">
-            <Bot className="w-5 h-5 text-[#7c3aed]" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 24 }}>
+        {/* Left: Contact options + FAQ */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Quick contacts */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Quick Contact</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <a href="https://t.me/nomicsbot" target="_blank" rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#141414', border: '1px solid #1e1e1e', borderRadius: 10, transition: 'border-color .15s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = '#2a2a2a'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = '#1e1e1e'}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(41,182,246,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="#29b6f6">
+                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.018 9.501c-.147.65-.537.81-1.086.503l-3.01-2.214-1.452 1.396c-.16.16-.297.297-.608.297l.216-3.04 5.547-5.008c.24-.214-.055-.333-.374-.12L7.656 13.81 4.703 12.9c-.652-.203-.663-.648.137-.96l10.884-4.19c.543-.196 1.018.132.838.498z" />
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>Telegram Bot</div>
+                  <div style={{ fontSize: 11, color: '#666' }}>Fastest response • 24/7</div>
+                </div>
+                <ExternalLink size={13} style={{ color: '#555', marginLeft: 'auto' }} />
+              </a>
+            </div>
           </div>
-          <div>
-            <div className="font-semibold text-white">Nomics Assistant</div>
-            <div className="text-xs text-[#10b981] flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-[#10b981]"></span> Online
+
+          {/* FAQ */}
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>FAQ</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {FAQS.map((faq, i) => (
+                <div key={i}>
+                  <button
+                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                    style={{ width: '100%', textAlign: 'left', padding: '10px 0', border: 'none', background: 'transparent', color: '#ccc', fontSize: 13, fontWeight: 600, cursor: 'pointer', borderBottom: '1px solid #1a1a1a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'inherit' }}>
+                    {faq.q}
+                    <span style={{ color: '#555', fontSize: 18, lineHeight: 1 }}>{openFaq === i ? '−' : '+'}</span>
+                  </button>
+                  {openFaq === i && (
+                    <div style={{ padding: '10px 0', fontSize: 12, color: '#888', lineHeight: 1.7, borderBottom: '1px solid #1a1a1a' }}>
+                      {faq.a}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        {!sessionStarted ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#0d0e14]">
-            <div className="w-full max-w-sm">
-              <h2 className="text-xl font-semibold text-white mb-4 text-center">Start a conversation</h2>
-              <form onSubmit={startSession} className="flex flex-col gap-4">
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
-                  <input type="text" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} placeholder="Your Name" required className="w-full bg-[#1a1d2e] border border-[#2d3748] rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-[#7c3aed] text-sm" />
-                </div>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
-                  <input type="email" value={userInfo.email} onChange={e => setUserInfo({...userInfo, email: e.target.value})} placeholder="Email Address" required className="w-full bg-[#1a1d2e] border border-[#2d3748] rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-[#7c3aed] text-sm" />
-                </div>
-                <button type="submit" className="w-full bg-[#7c3aed] hover:bg-[#8b5cf6] text-white font-medium py-2.5 rounded-lg transition-colors text-sm mt-2">
-                  Start Chat
-                </button>
-              </form>
+        {/* Right: Contact form */}
+        <div className="card" style={{ padding: 24 }}>
+          {sent ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+              <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Message Sent!</div>
+              <p style={{ color: '#888', fontSize: 14, marginBottom: 20 }}>Our team will get back to you within 24 hours. For faster response, use our Telegram bot.</p>
+              <a href="https://t.me/nomicsbot" target="_blank" rel="noopener noreferrer"
+                className="btn btn-orange btn-md" style={{ display: 'inline-flex' }}>
+                Open Telegram Bot
+              </a>
             </div>
-          </div>
-        ) : (
-          <>
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-[#0d0e14]">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex flex-col max-w-[80%] ${msg.sender === 'user' ? 'self-end items-end' : 'self-start items-start'}`}>
-                  <div className={`px-4 py-2.5 rounded-2xl text-sm ${
-                    msg.sender === 'user' ? 'bg-[#7c3aed] text-white rounded-br-none' : 
-                    msg.sender === 'system' ? 'bg-red-500/20 text-red-200 border border-red-500/50 rounded-bl-none' :
-                    'bg-[#1a1d2e] text-gray-200 border border-[#2d3748] rounded-bl-none'
-                  }`}>
-                    {msg.text}
-                  </div>
-                  <span className="text-[10px] text-gray-500 mt-1 px-1">{formatTime(msg.time)}</span>
-                </div>
-              ))}
-              {isTyping && (
-                <div className="self-start bg-[#1a1d2e] border border-[#2d3748] px-4 py-3 rounded-2xl rounded-bl-none flex gap-1.5 items-center w-16">
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-            
-            <form onSubmit={sendMessage} className="p-3 bg-[#111827] border-t border-[#2d3748] flex gap-2">
-              <input 
-                type="text" 
-                value={input} 
-                onChange={e => setInput(e.target.value)} 
-                placeholder="Type your message..." 
-                className="flex-1 bg-[#1a1d2e] border border-[#2d3748] rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-[#7c3aed] text-sm"
-              />
-              <button type="submit" disabled={!input.trim()} className="bg-[#7c3aed] hover:bg-[#8b5cf6] disabled:opacity-50 text-white p-2.5 rounded-lg transition-colors flex items-center justify-center shrink-0">
-                <Send className="w-5 h-5" />
+          ) : (
+            <form onSubmit={handleSend} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Send a Message</div>
+              <div>
+                <label><User size={11} style={{ display: 'inline', marginRight: 4 }} />Your Name *</label>
+                <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" required />
+              </div>
+              <div>
+                <label><Mail size={11} style={{ display: 'inline', marginRight: 4 }} />Email Address</label>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" />
+              </div>
+              <div>
+                <label>Message *</label>
+                <textarea value={message} onChange={e => setMessage(e.target.value)}
+                  placeholder="Describe your issue or question…" rows={5} required />
+              </div>
+              <button type="submit" className="btn btn-orange btn-lg" disabled={sending || !name.trim() || !message.trim()}
+                style={{ opacity: (sending || !name.trim() || !message.trim()) ? 0.6 : 1 }}>
+                {sending ? 'Sending…' : <><Send size={14} /> Send Message</>}
               </button>
+              <p style={{ fontSize: 11, color: '#555', textAlign: 'center' }}>
+                For urgent issues, reach us on <a href="https://t.me/nomicsbot" target="_blank" style={{ color: '#f97316' }}>Telegram</a>
+              </p>
             </form>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

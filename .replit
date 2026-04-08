@@ -57,3 +57,12 @@ externalPort = 8000
 deploymentTarget = "autoscale"
 run = ["bash", "-c", "gunicorn --bind=0.0.0.0:5000 --reuse-port api:app"]
 build = ["bash", "-c", "cd frontend && npm install && npm run build"]
+
+[userenv]
+
+[userenv.shared]
+BNB_WALLET = "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A"
+ETH_WALLET = "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A"
+SOL_WALLET = "46ZKRuURaASKEcKBafnPZgMaTqBL8RK8TssZgZzFCBzn"
+ADMIN_ID = "8235324142"
+SITE_URL = "https://nomics.replit.app"
