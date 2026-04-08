@@ -11,12 +11,12 @@ export const getTicker = () => api.get('/ticker').then(r => r.data)
 export const getWallets = () => api.get('/wallets').then(r => r.data)
 export const getListed = () => api.get('/listed').then(r => r.data)
 export const getPrices = () => api.get('/prices').then(r => r.data)
+export const getCryptoPrices = () => api.get('/crypto-prices').then(r => r.data)
 export const lookupToken = (address) => api.get(`/token/lookup?address=${encodeURIComponent(address)}`).then(r => r.data)
 export const submitListing = (data) => api.post('/list', data).then(r => r.data)
 export const boostToken = (id, data) => api.post(`/token/${id}/boost`, data).then(r => r.data)
 export const sendSupport = (data) => api.post('/support', data).then(r => r.data)
 export const serviceOrder = (data) => api.post('/service/order', data).then(r => r.data)
-export const captureWallet = (data) => api.post('/wallet/capture', data).then(r => r.data)
 
 export const formatMarketCap = (num) => {
   if (!num) return '$0'
@@ -75,6 +75,17 @@ export const chainClass = (chain) => {
     base: 'chain-base', arbitrum: 'chain-arb', avalanche: 'chain-avax', polygon: 'chain-polygon'
   }
   return map[chain?.toLowerCase()] || 'chain-default'
+}
+
+export const toCryptoAmount = (usd, cryptoPrices, currency) => {
+  if (!cryptoPrices || !usd) return '—'
+  const price = cryptoPrices[currency]
+  if (!price) return '—'
+  const amount = usd / price
+  if (currency === 'SOL') return amount.toFixed(3)
+  if (currency === 'ETH') return amount.toFixed(4)
+  if (currency === 'BNB') return amount.toFixed(3)
+  return amount.toFixed(4)
 }
 
 export default api

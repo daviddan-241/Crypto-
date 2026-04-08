@@ -4,7 +4,7 @@ services:
     env: python
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: python api.py
+    startCommand: gunicorn api:app --bind=0.0.0.0:$PORT --workers=2 --timeout=120 --preload
     autoDeploy: true
     healthCheckPath: /health
     envVars:
@@ -17,7 +17,7 @@ services:
       - key: DISCORD_WEBHOOK_URL
         sync: false
       - key: SITE_URL
-        value: https://nomics.replit.app
+        value: https://nomics-api.onrender.com
       - key: BNB_WALLET
         sync: false
       - key: ETH_WALLET
@@ -25,14 +25,13 @@ services:
       - key: SOL_WALLET
         sync: false
 
-  - type: web
+  - type: worker
     name: nomics-bot
     env: python
     plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     autoDeploy: true
-    healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.3"
@@ -43,12 +42,10 @@ services:
       - key: DISCORD_WEBHOOK_URL
         sync: false
       - key: SITE_URL
-        value: https://nomics.replit.app
+        value: https://nomics-api.onrender.com
       - key: BNB_WALLET
         sync: false
       - key: ETH_WALLET
         sync: false
       - key: SOL_WALLET
         sync: false
-      - key: PORT
-        value: "5000"

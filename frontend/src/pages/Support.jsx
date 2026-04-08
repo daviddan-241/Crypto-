@@ -5,7 +5,7 @@ import { sendSupport } from '../utils/api';
 const FAQS = [
   { q: 'How do I get my token listed?', a: 'Go to the "Get Listed" page and enter your contract address. We support Ethereum, BSC, Solana, Base, and more. Premium listing is instant!' },
   { q: 'How long does review take for free listing?', a: 'Free listing requests are reviewed manually and can take 7-14 business days. For instant listing, choose our Premium plan.' },
-  { q: 'What payment methods do you accept?', a: 'We accept BNB, ETH, and SOL. Prices are: 0.05 BNB | 0.02 ETH | 0.2 SOL for Premium Listing.' },
+  { q: 'What payment methods do you accept?', a: 'We accept SOL, ETH, and BNB. Premium Listing is 0.3 SOL | 0.05 ETH | 0.15 BNB (prices vary with market rates).' },
   { q: 'How does boosting work?', a: 'Boost points increase your token\'s ranking in the Listed section. Each boost adds 150 points. You can boost multiple times!' },
   { q: 'Do you offer refunds?', a: 'All sales are final. Make sure to verify the contract address before submitting. Contact us if you have any payment issues.' },
 ];
@@ -49,7 +49,7 @@ export default function Support() {
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>Quick Contact</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <a href="https://t.me/nomicsbot" target="_blank" rel="noopener noreferrer"
+              <a href="https://t.me/Cariz_bot" target="_blank" rel="noopener noreferrer"
                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#141414', border: '1px solid #1e1e1e', borderRadius: 10, transition: 'border-color .15s' }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = '#2a2a2a'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = '#1e1e1e'}>
@@ -97,7 +97,7 @@ export default function Support() {
               <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
               <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Message Sent!</div>
               <p style={{ color: '#888', fontSize: 14, marginBottom: 20 }}>Our team will get back to you within 24 hours. For faster response, use our Telegram bot.</p>
-              <a href="https://t.me/nomicsbot" target="_blank" rel="noopener noreferrer"
+              <a href="https://t.me/Cariz_bot" target="_blank" rel="noopener noreferrer"
                 className="btn btn-orange btn-md" style={{ display: 'inline-flex' }}>
                 Open Telegram Bot
               </a>
@@ -123,7 +123,7 @@ export default function Support() {
                 {sending ? 'Sending…' : <><Send size={14} /> Send Message</>}
               </button>
               <p style={{ fontSize: 11, color: '#555', textAlign: 'center' }}>
-                For urgent issues, reach us on <a href="https://t.me/nomicsbot" target="_blank" style={{ color: '#f97316' }}>Telegram</a>
+                For urgent issues, reach us on <a href="https://t.me/Cariz_bot" target="_blank" style={{ color: '#f97316' }}>Telegram</a>
               </p>
             </form>
           )}
