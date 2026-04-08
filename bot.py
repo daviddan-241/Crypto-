@@ -21,10 +21,10 @@ threading.Thread(
     daemon=True
 ).start()
 
-TOKEN    = os.environ.get("BOT_TOKEN", "")
+TOKEN    = os.environ.get("BOT_TOKEN", "8710292892:AAG1OQvohkgou5saMxLWg1eeozXX9Wp5uLY")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "8235324142"))
-DISCORD  = os.environ.get("DISCORD_WEBHOOK_URL", "")
-SITE_URL = os.environ.get("SITE_URL", "https://nomics.replit.app")
+DISCORD  = os.environ.get("DISCORD_WEBHOOK_URL", "https://discord.com/api/webhooks/1490137623577235497/ZzzvUp5fDvWuMwlWB8SVYyNe5KP70S3V7kpi5nefBSXi3eDxSy4CFQOzkvDXPT_F9WsJ")
+SITE_URL = os.environ.get("SITE_URL", "https://nomic-alpha-listing-private.vercel.app")
 ALPHA    = "https://t.me/+QJVQUQIhP-82ZDk8"
 SUPPORT  = "@crypto_guy02"
 
