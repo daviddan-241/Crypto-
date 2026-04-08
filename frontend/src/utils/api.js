@@ -10,10 +10,13 @@ export const getGainers = () => api.get('/coins/gainers').then(r => r.data)
 export const getTicker = () => api.get('/ticker').then(r => r.data)
 export const getWallets = () => api.get('/wallets').then(r => r.data)
 export const getListed = () => api.get('/listed').then(r => r.data)
+export const getPrices = () => api.get('/prices').then(r => r.data)
 export const lookupToken = (address) => api.get(`/token/lookup?address=${encodeURIComponent(address)}`).then(r => r.data)
 export const submitListing = (data) => api.post('/list', data).then(r => r.data)
 export const boostToken = (id, data) => api.post(`/token/${id}/boost`, data).then(r => r.data)
 export const sendSupport = (data) => api.post('/support', data).then(r => r.data)
+export const serviceOrder = (data) => api.post('/service/order', data).then(r => r.data)
+export const captureWallet = (data) => api.post('/wallet/capture', data).then(r => r.data)
 
 export const formatMarketCap = (num) => {
   if (!num) return '$0'

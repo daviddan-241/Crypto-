@@ -9,6 +9,7 @@ import CoinDetail from './pages/CoinDetail'
 import TokenDetail from './pages/TokenDetail'
 import SubmitCoin from './pages/SubmitCoin'
 import Support from './pages/Support'
+import ServicesPage from './pages/Services'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,6 +27,7 @@ function App() {
             <Route path="/listed" element={<Listed />} />
             <Route path="/trending" element={<Trending />} />
             <Route path="/hot" element={<Hot />} />
+            <Route path="/services" element={<ServicesPage />} />
             <Route path="/coin/:id" element={<CoinDetail />} />
             <Route path="/token/:address" element={<TokenDetail />} />
             <Route path="/submit" element={<SubmitCoin />} />
