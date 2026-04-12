@@ -39,17 +39,39 @@ states  = {}
 orders  = {}
 
 SERVICES = [
+kb = types.InlineKeyboardMarkup(row_width=2)
+    kb.add(
     ("🔥", "premium_listing", "Premium Listing",      True),
     ("📈", "dex_trending",    "DEX Trending Push",     True),
     ("📣", "shill_calls",     "Shill Calls",           True),
+    
+    )
+    kb.add(
+    
     ("🤖", "volume_bot",      "Volume Bot",            True),
     ("👥", "kol",             "KOL / Influencer",      True),
+    
+    )
+    kb.add(
+    
     ("📊", "promotion",       "Full Promotion",        True),
     ("𝕏",  "twitter",        "X Campaign",            True),
     ("😂", "meme",            "Meme Campaign",         True),
+    
+    )
+    kb.add(
+    
     ("🔗", "dex_listing",     "DEX Listing Support",   True),
+    
+    )
+    kb.add(
+    
     ("⚡", "quick_pump",      "Quick Pump",            True),
     ("🛠", "dex_tools",       "DEX Tools & Analytics", False),
+    
+    )
+    kb.add(
+    
     ("🔑", "alpha",           "Alpha Group Access",    False),
 ]
 
